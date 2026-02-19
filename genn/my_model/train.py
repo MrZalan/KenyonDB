@@ -108,7 +108,7 @@ symmetric_stdp = create_weight_update_model(
     """)
 
 # Create model and neuron populations
-model = GeNNModel("float", "mnist_mb_third_layer", backend="cuda")
+model = GeNNModel("float", "mnist_mb_test", backend="cuda")
 model.dt = DT
 
 lif_init = {"V": PN_PARAMS["Vreset"], "RefracTime": 0.0}
@@ -208,7 +208,7 @@ axis.set_xlabel("Weight [nA]")
 axis.set_ylabel("Count")
 
 # Saving weights
-np.save("kc_mbon_g.npy", kc_mbon_g_view)
+np.save("kc_mbon_g_test.npy", kc_mbon_g_view)
 
 pn_kc.pull_connectivity_from_device()
-np.save("pn_kc_ind.npy", np.vstack((pn_kc.get_sparse_pre_inds(), pn_kc.get_sparse_post_inds())))
+np.save("pn_kc_ind_test.npy", np.vstack((pn_kc.get_sparse_pre_inds(), pn_kc.get_sparse_post_inds())))
