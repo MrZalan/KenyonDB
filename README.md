@@ -4,6 +4,6 @@ emoji: 🧠
 colorFrom: indigo
 colorTo: blue
 sdk: docker
-app_file: mnist/app.py
+app_file: genn/mnist/app.py
 pinned: false
 ---
