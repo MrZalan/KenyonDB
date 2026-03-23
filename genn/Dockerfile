@@ -63,6 +63,6 @@ RUN python3 setup.py develop
 
 ENV PYTHONPATH=${GENN_PATH}
 
-EXPOSE 8501
+EXPOSE 7860
 
-CMD ["/bin/bash"]
+CMD ["sh", "-c", "cd mnist && streamlit run app.py --server.address=0.0.0.0 --server.port=7860"]
