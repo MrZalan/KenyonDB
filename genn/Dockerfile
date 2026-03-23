@@ -43,7 +43,13 @@ RUN python -m pip install --no-cache-dir --break-system-packages \
     streamlit \
     streamlit-drawable-canvas \
     resdag \
-    plotly
+    plotly \
+    umap \
+    networkx \
+    scikit-learn \
+    mlflow \
+    optuna \
+    sqlite3
 
 # 5. Clone and build GeNN
 RUN git clone --branch master --recursive https://github.com/genn-team/genn.git ${GENN_PATH}
