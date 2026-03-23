@@ -1,82 +1,64 @@
-import mnist
 import numpy as np
-import argparse
-import mlflow
+import sys
+import cv2
 from copy import copy
-from matplotlib import pyplot as plt
 from pygenn import (create_current_source_model, create_neuron_model, init_postsynaptic,
                     init_sparse_connectivity, init_weight_update, GeNNModel)
 from pygenn import create_var_ref, create_out_post_var_ref, create_custom_update_model
 from tqdm.auto import tqdm
+import argparse
 
-mnist.datasets_url = "https://storage.googleapis.com/cvdf-datasets/mnist/"
-testing_images = mnist.test_images()
-testing_images = np.reshape(testing_images, (testing_images.shape[0], -1)).astype(np.float32)
-testing_images /= np.sum(testing_images, axis=1)[:, np.newaxis]
-testing_labels = mnist.test_labels()
+parser = argparse.ArgumentParser()
+parser.add_argument("--image_path", type=str, help="Path to the image")
+args = parser.parse_args()
 
-pn_kc_ind = np.load("pn_kc_ind_test.npy")
-kc_mbon_g = np.load("kc_mbon_g_test.npy")
+image_path = args.image_path
+raw_img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+
+if raw_img is None:
+    raise ValueError(f"Could not open or find the image: {image_path}")
+
+image = raw_img.reshape(1, -1).astype(np.float32)
+image /= np.sum(image, axis=1)[:, np.newaxis]
+image = image.flatten()
+
+pn_kc_ind = np.load("pn_kc_ind.npy")
+kc_mbon_g = np.load("kc_mbon_g.npy")
 
 DT = 0.1
 
+INPUT_SCALE = 80.0
+
 NUM_PN = 784
+
+NUM_KC = 20000
 
 NUM_MBON = 10
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--input_scale', type=float, default=80.0)
-parser.add_argument('--num_kc', type=int, default=20000)
-parser.add_argument('--present_ms', type=float, default=20.0)
-
-parser.add_argument('--lif_c', type=float, default=0.2)
-parser.add_argument('--lif_tau_m', type=float, default=20.0)
-parser.add_argument('--lif_v_rest', type=float, default=-60.0)
-parser.add_argument('--lif_v_reset', type=float, default=-60.0)
-parser.add_argument('--lif_v_thresh', type=float, default=-50.0)
-parser.add_argument('--lif_ioffset', type=float, default=0.0)
-parser.add_argument('--lif_tau_refrac', type=float, default=2.0)
-
-parser.add_argument('--pn_tau_refrac', type=float, default=100.0)
-
-parser.add_argument('--pn_kc_weight', type=float, default=0.2)
-parser.add_argument('--pn_kc_tau_syn', type=float, default=3.0)
-parser.add_argument('--pn_kc_fan_in', type=int, default=20)
-
-parser.add_argument('--ggn_v_thresh', type=float, default=200)
-
-parser.add_argument('--mbon_stimulus_current', type=float, default=3.0)
-
-parser.add_argument('--kc_mbon_tau_syn', type=float, default=3.0)
-parser.add_argument('--stdp_tau', type=float, default=15.0)
-parser.add_argument('--stdp_rho', type=float, default=0.01)
-parser.add_argument('--stdp_eta', type=float, default=0.00002)
-parser.add_argument('--stdp_wMin', type=float, default=0.0)
-parser.add_argument('--stdp_wMax', type=float, default=0.0233)
-
-args = parser.parse_args()
+PRESENT_TIME_MS = 20.0
 
 LIF_PARAMS = {
-    "C": args.lif_c,
-    "TauM": args.lif_tau_m,
-    "Vrest": args.lif_v_rest,
-    "Vreset": args.lif_v_reset,
-    "Vthresh": args.lif_v_thresh,
-    "Ioffset": args.lif_ioffset,
-    "TauRefrac": args.lif_tau_refrac}
+    "C": 0.2,
+    "TauM": 20.0,
+    "Vrest": -60.0,
+    "Vreset": -60.0,
+    "Vthresh": -50.0,
+    "Ioffset": 0.0,
+    "TauRefrac": 2.0}
 
 PN_PARAMS = copy(LIF_PARAMS)
-PN_PARAMS["TauRefrac"] = args.pn_tau_refrac
+PN_PARAMS["TauRefrac"] = 100.0
+
+PN_KC_WEIGHT = 0.2
+
+PN_KC_TAU_SYN = 3.0
+
+PN_KC_FAN_IN = 20
+
+KC_MBON_TAU_SYN = 3.0
 
 GGN_PARAMS = {
-    "Vthresh": args.ggn_v_thresh}
-
-KC_MBON_PARAMS = {"tau": args.stdp_tau,
-                  "rho": args.stdp_rho,
-                  "eta": args.stdp_eta,
-                  "wMin": args.stdp_wMin,
-                  "wMax": args.stdp_wMax}
+    "Vthresh": 200.0}
 
 cs_model = create_current_source_model(
     "cs_model",
@@ -100,13 +82,13 @@ if_model = create_neuron_model(
     V = 0.0;
     """)
 
-model = GeNNModel("float", "mnist_mb_testing")
+model = GeNNModel("float", "mnist_mb_testing", "single_threaded_cpu")
 model.dt = DT
-
+print("Model backend:", model.backend_name)
 lif_init = {"V": PN_PARAMS["Vreset"], "RefracTime": 0.0}
 if_init = {"V": 0.0}
 pn = model.add_neuron_population("pn", NUM_PN, "LIF", PN_PARAMS, lif_init)
-kc = model.add_neuron_population("kc", args.num_kc, "LIF", LIF_PARAMS, lif_init)
+kc = model.add_neuron_population("kc", NUM_KC, "LIF", LIF_PARAMS, lif_init)
 ggn = model.add_neuron_population("ggn", 1, if_model, GGN_PARAMS, if_init)
 mbon = model.add_neuron_population("mbon", NUM_MBON, "LIF", LIF_PARAMS, lif_init)
 
@@ -128,16 +110,16 @@ ggn_kc = model.add_synapse_population("ggn_kc", "DENSE",
 
 pn_kc = model.add_synapse_population("pn_kc", "SPARSE",
                                      pn, kc,
-                                     init_weight_update("StaticPulseConstantWeight", {"g": args.pn_kc_weight}),
-                                     init_postsynaptic("ExpCurr", {"tau": args.pn_kc_tau_syn}))
+                                     init_weight_update("StaticPulseConstantWeight", {"g": PN_KC_WEIGHT}),
+                                     init_postsynaptic("ExpCurr", {"tau": PN_KC_TAU_SYN}))
 pn_kc.set_sparse_connections(pn_kc_ind[0], pn_kc_ind[1])
 
 kc_mbon = model.add_synapse_population("kc_mbon", "DENSE",
                                        kc, mbon,
                                        init_weight_update("StaticPulse", {}, {"g": kc_mbon_g}),
-                                       init_postsynaptic("ExpCurr", {"tau": args.kc_mbon_tau_syn}))
+                                       init_postsynaptic("ExpCurr", {"tau": KC_MBON_TAU_SYN}))
 
-present_timesteps = int(round(args.present_ms / DT))
+present_timesteps = int(round(PRESENT_TIME_MS / DT))
 
 reset_neuron_model = create_custom_update_model(
     "reset_neuron",
@@ -199,11 +181,11 @@ reset_synapse_kc_mbon = model.add_custom_update(
 model.build()
 model.load(num_recording_timesteps=present_timesteps)  
 
-latent_vectors = []
-image_labels = []
+latent_vector = []
+predicted_label = -1
 
-for s in tqdm(range(testing_images.shape[0])):
-    pn_input.vars["magnitude"].view[:] = testing_images[s] * args.input_scale
+for s in tqdm(range(1)):
+    pn_input.vars["magnitude"].view[:] = image * INPUT_SCALE
     pn_input.vars["magnitude"].push_to_device()
 
     for i in range(present_timesteps):
@@ -213,11 +195,14 @@ for s in tqdm(range(testing_images.shape[0])):
     kc_spike_times, kc_spike_ids = kc.spike_recording_data[0]
 
     active_kcs = np.unique(kc_spike_ids).astype(np.uint32)
-    latent_vectors.append(active_kcs)
-    image_labels.append(testing_labels[s])
+    latent_vector.append(active_kcs)
+
+    mbon_spike_times, mbon_spike_ids = mbon.spike_recording_data[0]
+    if len(mbon_spike_times) > 0:
+        predicted_label = mbon_spike_ids[np.argmin(mbon_spike_times)]
 
     model.custom_update("reset_group")
 
-np.savez_compressed("mnist_latent_vectors.npz", vectors=np.array(latent_vectors, dtype=object), labels=np.array(image_labels))
-print(f"Successfully saved {len(latent_vectors)} latent vectors.")
-print(latent_vectors[0])
+np.savez_compressed("snn_latent_vector.npz", vectors=np.array(latent_vector, dtype=object), labels=np.array(predicted_label))
+print(f"Successfully saved {len(latent_vector)} latent vectors.")
+print(predicted_label)

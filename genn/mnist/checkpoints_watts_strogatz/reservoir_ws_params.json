@@ -1,0 +1,27 @@
+{
+  "topology_type": "watts_strogatz",
+  "accuracy": 0.9128,
+  "trial_number": 11,
+  "res_cfg": {
+    "size": 500,
+    "feedback_size": 28,
+    "spectral_radius": 1.0847207712441698,
+    "leak_rate": 0.1119513247543345,
+    "topology_type": "watts_strogatz",
+    "topology_params": {
+      "k": 9,
+      "p": 0.32990169111575335
+    }
+  },
+  "sparse_cfg": {
+    "reservoir_dim": 500,
+    "sparse_dim": 4096,
+    "sh_lambda": 0.19192290025351547,
+    "l1_alpha": 0.002623931221135725,
+    "lr": 0.0001050315729946887,
+    "epochs": 15,
+    "early_stopping_patience": 4,
+    "early_stopping_min_delta": 0.0001,
+    "restore_best_weights": true
+  }
+}

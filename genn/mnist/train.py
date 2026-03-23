@@ -201,14 +201,9 @@ for s in tqdm(range(training_images.shape[0])):
 kc_mbon.vars["g"].pull_from_device()
 kc_mbon_g_view = kc_mbon.vars["g"].view
 
-fig, axis = plt.subplots(figsize=(10, 5))
-axis.hist(kc_mbon_g_view, bins=100)
-axis.axvline(np.average(kc_mbon_g_view), linestyle="--")
-axis.set_xlabel("Weight [nA]")
-axis.set_ylabel("Count")
 
 # Saving weights
-np.save("kc_mbon_g_test.npy", kc_mbon_g_view)
+np.save("kc_mbon_g.npy", kc_mbon_g_view)
 
 pn_kc.pull_connectivity_from_device()
-np.save("pn_kc_ind_test.npy", np.vstack((pn_kc.get_sparse_pre_inds(), pn_kc.get_sparse_post_inds())))
+np.save("pn_kc_ind.npy", np.vstack((pn_kc.get_sparse_pre_inds(), pn_kc.get_sparse_post_inds())))
