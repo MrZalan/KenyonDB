@@ -64,7 +64,7 @@ class KenyonDB:
         """Új rekord hozzáadása táblához"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            img_blob = self._serialize_image(image_data) # lehetővé teszi a képek adatbázisban való tárolását
+            img_blob = self.__serialize_image(image_data) # lehetővé teszi a képek adatbázisban való tárolását
             
             cursor.execute(
                 "INSERT INTO mnist_metadata (label, image_index, model_type, image_blob) VALUES (?,?,?,?)", 

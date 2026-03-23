@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 from resdag.layers import ReservoirLayer
 from typing import Optional, Dict, Any
 from torchvision import transforms
-from PIL import Image
 from copy import deepcopy
 
 
