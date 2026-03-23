@@ -42,7 +42,8 @@ RUN python -m pip install --no-cache-dir --break-system-packages \
     opencv-python-headless \
     streamlit \
     streamlit-drawable-canvas \
-    resdag
+    resdag \
+    plotly
 
 # 5. Clone and build GeNN
 RUN git clone --branch master --recursive https://github.com/genn-team/genn.git ${GENN_PATH}
