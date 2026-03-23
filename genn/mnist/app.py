@@ -207,7 +207,7 @@ class ModelRegistry:
 
         res_cfg = ReservoirConfig(**payload["res_cfg"])
         sparse_cfg = SparseConfig(**payload["sparse_cfg"])
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cpu")
 
         # Reservoir modellek létrehozása
         model = ReservoirModel(res_cfg, sparse_cfg)
