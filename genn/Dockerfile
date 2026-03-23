@@ -23,8 +23,8 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
 # 3. Environment
 ENV CUDA_PATH=/usr/local/cuda \
-    GENN_PATH=/opt/genn \
     APP_PATH=/opt/app \
+    GENN_PATH=/opt/app/genn \
     PYTHONUNBUFFERED=1
 
 # 4. Install Python dependencies
@@ -44,23 +44,24 @@ RUN python -m pip install --no-cache-dir --break-system-packages \
     streamlit-drawable-canvas \
     resdag \
     plotly \
-    umap \
+    umap-learn \
     networkx \
     scikit-learn \
     mlflow \
-    optuna \
-    sqlite3
+    optuna
 
-# 5. Clone and build GeNN
+# 5. Create app root and clone GeNN there
+RUN mkdir -p ${APP_PATH}
 RUN git clone --branch master --recursive https://github.com/genn-team/genn.git ${GENN_PATH}
+
+# 6. Copy project files into the cloned GeNN tree
+COPY . ${GENN_PATH}/
+
+# 7. Build PyGeNN from the merged tree
 WORKDIR ${GENN_PATH}
 RUN python3 setup.py develop
 
-# 6. Copy project files
-COPY . ${APP_PATH}/
-WORKDIR ${APP_PATH}
-
-ENV PYTHONPATH=${APP_PATH}
+ENV PYTHONPATH=${GENN_PATH}
 
 EXPOSE 8501
 
