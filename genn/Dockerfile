@@ -59,6 +59,9 @@ COPY . ${GENN_PATH}/
 
 # 7. Build PyGeNN from the merged tree
 WORKDIR ${GENN_PATH}
+
+COPY genn/ .
+
 RUN python3 setup.py develop
 
 ENV PYTHONPATH=${GENN_PATH}
