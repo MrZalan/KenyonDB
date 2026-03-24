@@ -50,21 +50,23 @@ RUN python -m pip install --no-cache-dir --break-system-packages \
     mlflow \
     optuna
 
-# 5. Create app root and clone GeNN there
+# 5. Create app root and clone GeNN
 RUN mkdir -p ${APP_PATH}
 RUN git clone --branch master --recursive https://github.com/genn-team/genn.git ${GENN_PATH}
 
-# 6. Copy project files into the cloned GeNN tree
-COPY . ${GENN_PATH}/
-
-# 7. Build PyGeNN from the merged tree
+# 6. Set the Workdir to the cloned GeNN path
 WORKDIR ${GENN_PATH}
 
-COPY genn/ .
+# 7. Copy your local 'genn' folder content into the GeNN path
+# This assumes you are running 'docker build' from the repo root
+COPY genn/ . 
 
+# 8. Build PyGeNN
 RUN python3 setup.py develop
-
 ENV PYTHONPATH=${GENN_PATH}
+
+# 9. Permissions for Hugging Face (UID 1000)
+RUN chmod -R 777 ${APP_PATH}
 
 EXPOSE 7860
 
