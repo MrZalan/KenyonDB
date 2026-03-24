@@ -65,4 +65,4 @@ ENV PYTHONPATH=${GENN_PATH}
 
 EXPOSE 7860
 
-CMD ["streamlit", "run", "genn/mnist/app.py", "--server.address=0.0.0.0", "--server.port=7860"]
+CMD ["streamlit", "run", "mnist/app.py", "--server.address=0.0.0.0", "--server.port=7860"]
