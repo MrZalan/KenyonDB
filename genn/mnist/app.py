@@ -1,6 +1,7 @@
 import os
 import json
 from dataclasses import dataclass
+from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
@@ -98,8 +99,6 @@ class InferencePayload:
     hero_fig: Any = None
     secondary_fig: Any = None
     summary_metrics: Optional[Dict[str, Any]] = None
-    test_accuracy: Optional[float] = None
-    latent_info: Optional[str] = None
     error: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -633,6 +632,113 @@ class VisualizationService:
         )
         return fig
 
+class ModelStrategy(ABC):
+    """Absztrakt osztály ami definiál egy közös interfészt a modell típusoknak"""
+
+    @abstractmethod
+    def load(self):
+        """Modell súlyok és paraméterek betöltése"""
+        pass
+
+    @abstractmethod
+    def run_inference(image_path):
+        """Modellek inference metódusait futtatja és visszakapja a predikciót és latent vektorokat"""
+        pass
+
+    @abstractmethod
+    def plot_results(inf_result, payload, num_results):
+        """Inference eredmények vizualizációja"""
+        pass
+
+class SnnStrategy(ModelStrategy):
+    def __init__(self, registry, visualizer):
+        self.registry = registry
+        self.model = None
+        self.visualizer = visualizer
+
+    def load(self):
+        self.model = self.registry.load_snn_model()
+
+    def run_inference(self, image_path):
+        result = self.model.inference_with_spikes(image_path)
+
+        return {
+            "prediction": int(result["prediction"]),
+            "active_kcs": list(result["active_kcs"]),
+            "spike_data": result["spikes"]
+        }
+
+    def plot_results(self, inf_result, payload, num_results):
+        prediction = inf_result["prediction"]
+        active_kcs = inf_result["active_kcs"]
+        spike_data = inf_result["spike_data"]
+
+        payload.prediction = prediction
+        payload.hero_fig = self.visualizer.plot_mb_raster(spike_data)
+        payload.secondary_fig = self.visualizer.plot_mbon_activity(spike_data)
+
+        payload.summary_metrics = {
+            "PN spikes": len(spike_data["pn"]["ids"]),
+            "Active KCs": len(active_kcs),
+            "MBON spikes": len(spike_data["mbon"]["ids"]),
+            "Retrieved": num_results,
+        }
+
+        return active_kcs
+
+class ReservoirStrategy(ModelStrategy):
+    def __init__(self, registry, visualizer, config, selected_model):
+        self.registry = registry
+        self.model = None
+        self.visualizer = visualizer
+        self.selected_model = selected_model
+        self.config = config
+
+    def load(self):
+        weight_file, params_file = self.config.topology_map()[self.selected_model]
+        self.model = self.registry.load_reservoir_model(weight_file, params_file)
+
+    def run_inference(self, image_path):
+        result = self.model.inference(image_path, topk=64) 
+        
+        return {
+            "retrieval_ids": list(result["latent_indices"]),
+            "prediction": int(result["prediction"]),
+            "reservoir": self.model.model.reservoir
+        }
+
+    def plot_results(self, inf_result, payload, num_results):
+        prediction = inf_result["prediction"]
+        retrieval_ids = inf_result["retrieval_ids"]
+        reservoir = inf_result["reservoir"]
+
+        payload.prediction = prediction
+        
+        try:
+            reservoir_graph = self.visualizer.build_reservoir_graph_from_weight_hh(reservoir, max_nodes=120)
+            payload.hero_fig = self.visualizer.plot_reservoir_graph_core(reservoir_graph, title=f"{self.selected_model} Reservoir Core")
+            
+            stats = self.visualizer.get_reservoir_graph_stats(reservoir)
+            payload.summary_metrics = {
+                "Nodes": stats["nodes"],
+                "Edges": stats["edges"],
+                "Density": f"{stats['density']:.4f}",
+                "Retrieved": num_results,
+            }
+        except Exception as exc:
+            payload.error = f"Graph visualization failed: {exc}"
+            
+        return retrieval_ids
+
+class ModelFactory:
+    @staticmethod
+    def create(model_name, registry, config, visualizer):
+        if "Mushroom Body" in model_name:
+            return SnnStrategy(registry, visualizer)
+        else:
+            model_type_key = registry.get_model_type_key(model_name)
+            return ReservoirStrategy(registry, visualizer, config, model_type_key)
+
 
 class InferenceService:
     """Inferencek futtatásáért felelős osztály"""
@@ -642,99 +748,53 @@ class InferenceService:
         config: AppConfig,
         registry: ModelRegistry,
         db_service: DatabaseService,
-        viz: VisualizationService,
+        visualizer: VisualizationService,
     ) -> None:
         self.paths = paths
         self.config = config
         self.registry = registry
         self.db_service = db_service
-        self.viz = viz
+        self.visualizer = visualizer
 
-    def __run_mb_inference(self, image_path: str, payload: InferencePayload, num_results: int):
-        """SNN modell futtatása"""
-        simulator = self.registry.load_snn_model() # modell betöltése
-
-        mb_result = simulator.inference_with_spikes(image_path) # inference
-        prediction = int(mb_result["prediction"]) # predikció
-        active_kcs = list(mb_result["active_kcs"]) # latent vektor (aktív Kenyon sejt indexek)
-        spike_data = mb_result["spikes"] # neuronok tüzelésének adatai
-
-        # Eredmények megjelenítése
-        payload.prediction = prediction
-        payload.hero_fig = self.viz.plot_mb_raster(spike_data)
-        payload.secondary_fig = self.viz.plot_mbon_activity(spike_data)
-        payload.summary_metrics = {
-            "PN spikes": len(spike_data["pn"]["ids"]),
-            "Active KCs": len(active_kcs),
-            "MBON spikes": len(spike_data["mbon"]["ids"]),
-            "Retrieved": num_results,
-        }
-        payload.latent_info = f"Active Kenyon Cells: {active_kcs[:min(len(active_kcs), 24)]}"
-        return active_kcs
-
-    def __run_reservoir_inference(self, image_path: str, selected_model: str, payload: InferencePayload, num_results: int):
-        weight_file, params_file = self.config.topology_map()[selected_model]
-        trainer = self.registry.load_reservoir_model(weight_file, params_file)
-
-        result = trainer.inference(image_path, topk=64) # inference
-        retrieval_ids = list(result["latent_indices"]) # latent vektor indexek
-        payload.prediction = int(result["prediction"]) # predikció
-
-        # Eredmények megjelenítése
-        try:
-            reservoir_graph = self.viz.build_reservoir_graph_from_weight_hh(trainer.model.reservoir, max_nodes=120)
-            payload.hero_fig = self.viz.plot_reservoir_graph_core(reservoir_graph, title=f"{selected_model} Reservoir Core")
-            stats = self.viz.get_reservoir_graph_stats(trainer.model.reservoir)
-            payload.summary_metrics = {
-                "Nodes": stats["nodes"],
-                "Edges": stats["edges"],
-                "Density": f"{stats['density']:.4f}",
-                "Retrieved": num_results,
-            }
-        except Exception as exc:
-            payload.error = f"Could not visualize reservoir graph core: {exc}"
-
-        return retrieval_ids
 
     def run_inference(self, img: np.ndarray, selected_model: str, num_results: int) -> InferencePayload:
-        """Teljes inference pipeline futtatása"""
+        """Teljes polimorf inference pipeline"""
         model_type_key = self.registry.get_model_type_key(selected_model)
         payload = InferencePayload(selected_model=selected_model, model_type_key=model_type_key)
 
         try:
-            cv2.imwrite(self.paths.image_path, img) # Bemeneti kép elmentése OpenCV-vel
+            cv2.imwrite(self.paths.image_path, img)
 
-            # Kívánt modell kiválasztása
-            if selected_model == "Spiking Neural Network (Mushroom Body)":
-                retrieval_ids = self.__run_mb_inference(self.paths.image_path, payload, num_results)
-            else:
-                retrieval_ids = self.__run_reservoir_inference(self.paths.image_path, selected_model, payload, num_results)
+            strategy = ModelFactory.create(selected_model, self.registry, self.config, self.visualizer)
+            strategy.load()
 
-            # Hasonlósági keresés indítása
+            inf_result = strategy.run_inference(self.paths.image_path)
+            retrieval_ids = strategy.plot_results(inf_result, payload, num_results)
+
             payload.results = self.db_service.similarity_search(
                 query_active_ids=retrieval_ids,
                 model_type=model_type_key,
                 top_k=num_results,
             )
 
-            # UMAP megjelenítése
-            umap_bundle = self.viz.compute_cached_global_umap_bundle(self.paths.db_path, model_type_key)
-            cached_umap_df = None if umap_bundle is None else umap_bundle["df"]
-            query_point = self.viz.project_query_with_cached_bundle(retrieval_ids, umap_bundle)
-            payload.umap_fig = self.viz.plot_cached_global_umap(
-                cached_df=cached_umap_df,
-                results=payload.results,
-                query_point=query_point,
-                model_name=selected_model,
-            )
+            umap_bundle = self.visualizer.compute_cached_global_umap_bundle(self.paths.db_path, model_type_key)
+            if umap_bundle:
+                query_point = self.visualizer.project_query_with_cached_bundle(retrieval_ids, umap_bundle)
+                payload.umap_fig = self.visualizer.plot_cached_global_umap(
+                    cached_df=umap_bundle["df"],
+                    results=payload.results,
+                    query_point=query_point,
+                    model_name=selected_model,
+                )
 
             y_true, y_pred = self.evaluate_model_confusion(selected_model, num_samples=1000)
-            payload.cm_fig = self.viz.plot_confusion_matrix(y_true, y_pred, selected_model)
+            payload.cm_fig = self.visualizer.plot_confusion_matrix(y_true, y_pred, selected_model)
+            
             if payload.results:
-                payload.fig_overlap, payload.fig_scores = self.viz.plot_similarity_metrics_split(payload.results)
+                payload.fig_overlap, payload.fig_scores = self.visualizer.plot_similarity_metrics_split(payload.results)
 
         except Exception as exc:
-            payload.error = str(exc)
+            payload.error = f"Inference Error: {str(exc)}"
 
         return payload
 
@@ -787,7 +847,7 @@ class InferenceService:
         """UMAP kiszámolása és cachelése előre"""
         for model_key in ["mb", "ws", "ba", "er"]:
             try:
-                self.viz.compute_cached_global_umap_bundle(self.paths.db_path, model_key)
+                self.visualizer.compute_cached_global_umap_bundle(self.paths.db_path, model_key)
                 SessionManager.add_db_log(f"[OK] UMAP cached for {model_key}")
             except Exception as exc:
                 SessionManager.add_db_log(f"[WARN] UMAP cache failed for {model_key}: {exc}")
@@ -801,14 +861,14 @@ class StreamlitRenderer:
         config: AppConfig,
         registry: ModelRegistry,
         db_service: DatabaseService,
-        viz: VisualizationService,
+        visualizer: VisualizationService,
         inference: InferenceService,
     ) -> None:
         self.paths = paths
         self.config = config
         self.registry = registry
         self.db_service = db_service
-        self.viz = viz
+        self.visualizer = visualizer
         self.inference = inference
 
     def render_database_summary(self) -> None:
@@ -860,7 +920,7 @@ class StreamlitRenderer:
             with cols[idx % 3].container(border=True):
                 st.caption(f"Rank #{idx + 1}")
                 if record and record["image"] is not None:
-                    st.image(self.viz.prepare_image_for_display(record["image"]), use_container_width=True)
+                    st.image(self.visualizer.prepare_image_for_display(record["image"]), use_container_width=True)
                 else:
                     st.info("No preview available")
 
@@ -1092,14 +1152,14 @@ class DigitRecognitionApp:
         self.config = AppConfig()
         self.registry = ModelRegistry(self.paths, self.config)
         self.db_service = DatabaseService(self.paths, self.registry)
-        self.viz = VisualizationService(self.paths, self.db_service, self.registry)
-        self.inference = InferenceService(self.paths, self.config, self.registry, self.db_service, self.viz)
+        self.visualizer = VisualizationService(self.paths, self.db_service, self.registry)
+        self.inference = InferenceService(self.paths, self.config, self.registry, self.db_service, self.visualizer)
         self.renderer = StreamlitRenderer(
             self.paths,
             self.config,
             self.registry,
             self.db_service,
-            self.viz,
+            self.visualizer,
             self.inference,
         )
 
