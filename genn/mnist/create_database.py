@@ -25,7 +25,7 @@ class DataStrategy(ABC):
 
         with self.db_service.get_connection():
             for i in range(len(vectors)):
-                self.add_new_record(labels[i], i, vectors[i], model_type, images[i])
+                self.db_service.add_new_record(labels[i], i, vectors[i], model_type, images[i])
 
         print(f"{model_type} population complete")
 
@@ -53,10 +53,20 @@ class KenyonDB:
     """Sqlite adatbázis latent vektorok és metadata tárolásásra"""
     def __init__(self, db_path="kenyon.db"):
         self.db_path = db_path
+        self.__conn = None
         self.create_tables()
 
     def get_connection(self):
         """Csatlakozás az adatbázishoz"""
+        # Teszteléshez szükséges
+        if self.db_path == ":memory:":
+            if self.__conn is None:
+                self.__conn = sqlite3.connect(self.db_path, check_same_thread=False)
+                self.__conn.execute("PRAGMA journal_mode=WAL;")
+                self.__conn.execute("PRAGMA synchronous=NORMAL;")
+                self.__conn.execute("PRAGMA temp_store=MEMORY;")
+            return self.__conn
+
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA journal_mode=WAL;") # Write-Ahead Logging, lehetővé teszi  konkurens olvasást és írást
         conn.execute("PRAGMA synchronous=NORMAL;") # írás sebesség gyorsítása
