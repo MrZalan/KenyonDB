@@ -107,6 +107,37 @@ class InferencePayload:
         if self.summary_metrics is None:
             self.summary_metrics = {}
 
+class PayloadBuilder:
+    def __init__(self, selected_model, model_type_key):
+        self.__payload = InferencePayload(selected_model=selected_model, model_type_key=model_type_key)
+
+    def add_prediction(self, prediction):
+        self.__payload.prediction = prediction
+        return self
+    
+    def add_visualizations(self, hero_fig=None, secondary_fig=None, umap_fig=None, cm_fig=None, fig_overlap=None, fig_scores=None):
+        self.__payload.hero_fig = hero_fig
+        self.__payload.secondary_fig = secondary_fig
+        self.__payload.umap_fig = umap_fig
+        self.__payload.cm_fig = cm_fig
+        self.__payload.fig_overlap = fig_overlap
+        self.__payload.fig_scores = fig_scores
+        return self
+    
+    def add_metrics(self, metrics):
+        self.__payload.summary_metrics = metrics
+        return self
+
+    def add_similarity_results(self, results):
+        self.__payload.results = results
+        return self
+    
+    def add_error(self, error):
+        self.__payload.error = error
+        return self
+    
+    def build(self):
+        return self.__payload
 
 class SessionManager:
     """Session adatainak inicializálása"""
@@ -696,22 +727,19 @@ class SnnStrategy(ModelStrategy):
             "spike_data": result["spikes"]
         }
 
-    def plot_results(self, inf_result, payload, num_results):
+    def plot_results(self, inf_result, payload_builder, num_results):
         prediction = inf_result["prediction"]
         active_kcs = inf_result["active_kcs"]
         spike_data = inf_result["spike_data"]
 
-        payload.prediction = prediction
-        payload.hero_fig = self.visualizer.plot_mb_raster(spike_data)
-        payload.secondary_fig = self.visualizer.plot_mbon_activity(spike_data)
-
-        payload.summary_metrics = {
+        payload_builder.add_prediction(prediction).add_visualization(hero_fig=self.visualizer.plot_mb_raster(spike_data),
+                        secondary_fig=self.visualizer.plot_mbon_activity(spike_data))\
+                        .add_metrics({
             "PN spikes": len(spike_data["pn"]["ids"]),
             "Active KCs": len(active_kcs),
             "MBON spikes": len(spike_data["mbon"]["ids"]),
             "Retrieved": num_results,
-        }
-
+        })
         return active_kcs
 
 class ReservoirStrategy(ModelStrategy):
@@ -788,7 +816,7 @@ class InferenceService:
     def run_inference(self, img: np.ndarray, selected_model: str, num_results: int) -> InferencePayload:
         """Teljes polimorf inference pipeline"""
         model_type_key = self.registry.get_model_type_key(selected_model)
-        payload = InferencePayload(selected_model=selected_model, model_type_key=model_type_key)
+        builder = PayloadBuilder(selected_model, model_type_key)
 
         try:
             cv2.imwrite(self.paths.image_path, img)
@@ -797,34 +825,40 @@ class InferenceService:
             strategy.load()
 
             inf_result = strategy.run_inference(self.paths.image_path)
-            retrieval_ids = strategy.plot_results(inf_result, payload, num_results)
+            builder.add_prediction(inf_result["prediction"])
+            retrieval_ids = strategy.plot_results(inf_result, builder, num_results)
 
-            payload.results = self.db_service.similarity_search(
+            results = self.db_service.similarity_search(
                 query_active_ids=retrieval_ids,
                 model_type=model_type_key,
                 top_k=num_results,
             )
 
+            builder.add_similarity_results(results)
+
             umap_bundle = self.visualizer.compute_cached_global_umap_bundle(self.paths.db_path, model_type_key)
-            if umap_bundle:
+            if umap_bundle and results:
                 query_point = self.visualizer.project_query_with_cached_bundle(retrieval_ids, umap_bundle)
-                payload.umap_fig = self.visualizer.plot_cached_global_umap(
+                fig_overlap, fig_scores = self.visualizer.plot_similarity_metrics_split(results)
+                umap_fig = self.visualizer.plot_cached_global_umap(
                     cached_df=umap_bundle["df"],
-                    results=payload.results,
+                    results=results,
                     query_point=query_point,
                     model_name=selected_model,
                 )
+                y_true, y_pred = self.evaluate_model_confusion(selected_model, num_samples=1000)
+                cm_fig = self.visualizer.plot_confusion_matrix(y_true, y_pred, selected_model)
+                builder.add_visualizations(
+                    umap_fig=umap_fig,
+                    fig_overlap=fig_overlap,
+                    fig_scores=fig_scores,
+                    cm_fig=cm_fig
+                )
 
-            y_true, y_pred = self.evaluate_model_confusion(selected_model, num_samples=1000)
-            payload.cm_fig = self.visualizer.plot_confusion_matrix(y_true, y_pred, selected_model)
-            
-            if payload.results:
-                payload.fig_overlap, payload.fig_scores = self.visualizer.plot_similarity_metrics_split(payload.results)
+            return builder.build()
 
         except Exception as exc:
-            payload.error = f"Inference Error: {str(exc)}"
-
-        return payload
+            return builder.add_error(str(exc)).build()
 
     @st.cache_data(show_spinner=False)
     def evaluate_model_confusion(_self, selected_model: str, num_samples: int = 1000):
