@@ -77,13 +77,15 @@ class KenyonDB:
         """Táblák létrehozása"""
         # Táblák: mnist_metadata, mnist_vectors
         # Indexek: idx_neuron, idx_model, idx_image_id, idx_neuron_image
+        # UNIQE megszorítás a duplikátumok elkerülésére
         sql_statements = [ 
             """CREATE TABLE IF NOT EXISTS mnist_metadata(
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     label INTEGER, 
                     image_index INTEGER,
                     model_type TEXT,
-                    image_blob BLOB
+                    image_blob BLOB,
+                    UNIQUE(image_index, model_type)
                 );""",
             """CREATE TABLE IF NOT EXISTS mnist_vectors (
                     neuron_id INTEGER,
@@ -122,18 +124,19 @@ class KenyonDB:
             cursor = conn.cursor()
             img_blob = self.__serialize_image(image_data) # lehetővé teszi a képek adatbázisban való tárolását
             
+            # IGNORE a duplikátumok elkerülése miatt
             cursor.execute(
-                "INSERT INTO mnist_metadata (label, image_index, model_type, image_blob) VALUES (?,?,?,?)", 
+                "INSERT OR IGNORE INTO mnist_metadata (label, image_index, model_type, image_blob) VALUES (?,?,?,?)", 
                 (int(label), int(original_index), str(model_type), img_blob)
             )
             image_id = cursor.lastrowid
-            
-            vector_data = [(int(nid), image_id) for nid in active_ids]
-            cursor.executemany(
-                "INSERT INTO mnist_vectors (neuron_id, image_id) VALUES (?,?)",
-                vector_data
-            )
-            conn.commit()
+            if image_id:
+                vector_data = [(int(nid), image_id) for nid in active_ids]
+                cursor.executemany(
+                    "INSERT INTO mnist_vectors (neuron_id, image_id) VALUES (?,?)",
+                    vector_data
+                )
+                conn.commit()
 
     def clear_database_by_model(self, model_type):
         """Rekordok törlése adott modell típushoz"""
@@ -187,6 +190,7 @@ class KenyonDB:
         # 1. Potenciális jelöltek kiválogatása akiknek legalább van 1 közös neuronjuk
         # 2. Jelöltek neuron mennyiségének kiszámolása
         # 3. Hasonlósági metrikák kiszámítása
+        # NULLIF a nullával való osztás elkerülése miatt
         query = f"""
             WITH candidate_overlap AS (
                 SELECT v.image_id, COUNT(*) AS overlap
@@ -207,9 +211,9 @@ class KenyonDB:
                 m.label,
                 co.overlap,
                 cs.target_size,
-                CAST(co.overlap AS FLOAT) / (? + cs.target_size - co.overlap) AS jaccard,
-                (2.0 * co.overlap) / (? + cs.target_size) AS dice,
-                CAST(co.overlap AS FLOAT) / MIN(? , cs.target_size) AS overlap_coeff
+                CAST(co.overlap AS FLOAT) / NULLIF((? + cs.target_size - co.overlap),0) AS jaccard,
+                (2.0 * co.overlap) / NULLIF((? + cs.target_size),0) AS dice,
+                CAST(co.overlap AS FLOAT) / NULLIF(MIN(? , cs.target_size),0) AS overlap_coeff
             FROM candidate_overlap co
             JOIN candidate_sizes cs ON co.image_id = cs.image_id
             JOIN mnist_metadata m ON co.image_id = m.id

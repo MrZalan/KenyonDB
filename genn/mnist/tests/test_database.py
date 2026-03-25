@@ -110,3 +110,70 @@ def test_invalid_image_data(db):
     db.add_new_record(label=0, original_index=0, active_ids=[1], model_type="mb", image_data=None)
     result = db.get_record_by_image_id(1)
     assert result["image"] is None
+
+def test_get_all_vectors(db):
+    db.add_new_record(label=1, original_index=0, active_ids=[1, 2], model_type="mb")
+    db.add_new_record(label=2, original_index=1, active_ids=[3, 4], model_type="mb")
+    db.add_new_record(label=3, original_index=2, active_ids=[5, 6], model_type="mb")
+    
+    vectors = db.get_all_vectors_by_model("mb")
+    assert len(vectors) == 3
+    assert vectors[0]["active_ids"] == [1, 2]
+    assert vectors[1]["active_ids"] == [3, 4]
+    assert vectors[2]["active_ids"] == [5, 6]
+    assert vectors[0]["label"] == 1
+    assert vectors[1]["label"] == 2
+    assert vectors[2]["label"] == 3
+
+def test_similarity_no_overlap(db):
+    db.add_new_record(label=1, original_index=0, active_ids=[1, 2, 3], model_type="mb")
+    
+    results = db.similarity_search([99, 100], model_type="mb")
+    assert len(results) == 0
+
+def test_similarity_ranking_order(db):
+    db.add_new_record(label=1, original_index=0, active_ids=[1, 2, 3], model_type="mb") 
+    db.add_new_record(label=2, original_index=1, active_ids=[1, 2, 3, 4], model_type="mb") 
+    
+    query = [1, 2, 3, 4]
+    results = db.similarity_search(query, model_type="mb", top_k=5)
+    
+    assert len(results) == 2
+    assert results[0]["label"] == 2
+    assert results[0]["metrics"]["jaccard"] == 1.0
+
+def test_large_image_serialization(db):
+    img = np.random.rand(100, 100).astype(np.float32)
+    db.add_new_record(label=9, original_index=0, active_ids=[1], model_type="ba", image_data=img)
+    
+    record = db.get_record_by_image_id(1)
+    np.testing.assert_array_almost_equal(record["image"], img)
+
+def test_get_image_and_label_not_found(db):
+    label, img = db.get_image_and_label(999)
+    assert label is None
+    assert img is None
+
+def test_import_wrong_file_extension(db, tmp_path):
+    bad_file = tmp_path / "not_a_torch_file.pt"
+    bad_file.write_text("Ez egy teszt fájl hibás fájlformátum tesztelésére")
+
+    strategy = PtStrategy(db)
+    
+    with pytest.raises(Exception):
+        strategy.import_data(str(bad_file), "er")
+
+def test_duplicate_insertion_prevention(db):
+    active_ids = [1, 2, 3]
+    db.add_new_record(5, 100, active_ids, "mb")
+    db.add_new_record(5, 100, [4, 5, 6], "mb") 
+
+    summary = db.get_database_summary()
+    assert summary["models"]["mb"]["image_count"] == 1
+    assert summary["models"]["mb"]["vector_count"] == 3
+
+def test_similarity_search_zero_division(db):
+    db.add_new_record(1, 0, [1], "mb")
+    
+    results = db.similarity_search([1], "mb")
+    assert results[0]["metrics"]["jaccard"] == 1.0
