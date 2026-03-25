@@ -9,6 +9,7 @@ from reservoir_models import SoftShrink, ReservoirModel, ReservoirConfig, Sparse
 
 @pytest.fixture
 def mock_mnist_loader():
+    """Adathalmaz helyettesítése tesztekhez"""
     set_seed(42)
     x = torch.randn(10, 1, 28, 28)
     y = torch.randint(0, 10, (10,))
@@ -16,6 +17,7 @@ def mock_mnist_loader():
     return DataLoader(dataset, batch_size=2)
 
 def test_reproducibility():
+    """Modell architektúra reprodukálásának seedelés tesztelése"""
     topo_params = {"seed": 42}
     cfg = ReservoirConfig(size=100, topology_type="watts_strogatz", topology_params=topo_params)
     scfg = SparseConfig(reservoir_dim=100)
@@ -31,6 +33,7 @@ def test_reproducibility():
     torch.testing.assert_close(w1, w2)
 
 def test_soft_shrink_logic():
+    """SoftShrink logika tesztelése"""
     sh_lambda = 0.5
     soft_shrink = SoftShrink(sh_lambda=sh_lambda)
     input = torch.tensor([-1.0, -0.5, 0.0, 0.5, 1.0])
@@ -38,7 +41,8 @@ def test_soft_shrink_logic():
     output = soft_shrink(input)
     torch.testing.assert_close(output, expected)
 
-def test_reservoir_free():
+def test_reservoir_freeze():
+    """Rezervoir befagyasztásának tesztje"""
     res_cfg = ReservoirConfig(size=100)
     sparse_cfg = SparseConfig(reservoir_dim=100)
     model = ReservoirModel(res_cfg, sparse_cfg)
@@ -50,6 +54,7 @@ def test_reservoir_free():
         assert param.requires_grad
 
 def test_inference_output(tmp_path):
+    """Inference output helyességének tesztje"""
     res_cfg = ReservoirConfig(size=128)
     sparse_cfg = SparseConfig(reservoir_dim=128, sparse_dim=256)
     model = ReservoirModel(res_cfg, sparse_cfg)
@@ -66,6 +71,7 @@ def test_inference_output(tmp_path):
     assert isinstance(result["latent_indices"], np.ndarray)
 
 def test_latent_indices_extraction(mock_mnist_loader):
+    """Latent vektor indexek kimentésének tesztje"""
     device = torch.device("cpu")
     model = ReservoirModel(ReservoirConfig(size=100), SparseConfig(reservoir_dim=100))
     trainer = ReservoirTrainer(model, SparseConfig(), device)
@@ -78,6 +84,7 @@ def test_latent_indices_extraction(mock_mnist_loader):
     assert result["images"].dtype == torch.uint8
 
 def test_inference_topk_boundary(tmp_path):
+    """Kevesebb neuron, mint top_k tesztje"""
     device = torch.device("cpu")
     sparse_cfg = SparseConfig(reservoir_dim=100, sparse_dim=50)
     model = ReservoirModel(ReservoirConfig(size=100), sparse_cfg)
