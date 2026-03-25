@@ -119,10 +119,7 @@ class SessionManager:
         if "result_count" not in st.session_state:
             st.session_state.result_count = 5
 
-    @staticmethod
-    def add_db_log(message: str) -> None:
-        st.session_state.db_logs.insert(0, message)
-        st.session_state.db_logs = st.session_state.db_logs[:50]
+
 
 
 class ModelRegistry:
@@ -214,6 +211,11 @@ class ModelRegistry:
         trainer.load_weights(weight_path)
         return trainer
 
+class DatabaseObserver(ABC):
+    "Absztrakt osztály az observer tervezési mintához az adatbázis logokhoz"
+    @abstractmethod
+    def update(self, message: str):
+        pass
 
 class DatabaseService:
     """Adatbázist kezelő osztály"""
@@ -221,6 +223,21 @@ class DatabaseService:
         self.paths = paths
         self.registry = registry
         self.db = KenyonDB(paths.db_path)
+        self.__observers = []
+
+    def attach(self, observer: DatabaseObserver):
+        """Új megfigyelő hozzáadása"""
+        if observer not in self.__observers:
+            self.__observers.append(observer)
+
+    def detach(self, observer: DatabaseObserver):
+        """Megfigyelő törlése a listából"""
+        self.__observers.remove(observer)
+
+    def notify(self, message: str):
+        """Megfigyelők értesítése"""
+        for observer in self.__observers:
+            observer.update(message)
 
     def save_uploaded_latent_file(self, uploaded_file) -> str:
         """Feltöltött latent vektor fájlok elmentése"""
@@ -232,7 +249,7 @@ class DatabaseService:
     def populate_from_uploaded_file(self, uploaded_file, selected_model_name: str) -> bool:
         """Adatbázis felpopulálása feltöltött latent vektor fájlból"""
         if uploaded_file is None:
-            SessionManager.add_db_log(f"[SKIP] No file uploaded for {selected_model_name}.") # hibás fájl esetén logolás
+            self.notify(f"[SKIP] No file uploaded for {selected_model_name}.") # hibás fájl esetén logolás
             return False
 
         model_type = self.registry.get_model_type_key(selected_model_name)
@@ -248,7 +265,7 @@ class DatabaseService:
             if file_ext in strategies:
                 strategies[file_ext].import_data(saved_file_path, model_type)
             else:
-                SessionManager.add_db_log(
+                self.notify(
                     f"[ERROR] Unsupported file type for {selected_model_name}: {uploaded_file.name}" # hibás fájl esetén logolás
                 )
                 return False
@@ -256,13 +273,13 @@ class DatabaseService:
             # Összesítő logok kiíratása
             summary = self.db.get_database_summary()
             model_summary = summary["models"][model_type]
-            SessionManager.add_db_log(
+            self.notify(
                 f"[OK] {selected_model_name} <- {uploaded_file.name} | "
                 f"images={model_summary['image_count']} vectors={model_summary['vector_count']}"
             )
             return True
         except Exception as exc:
-            SessionManager.add_db_log(f"[ROLLBACK] Upload failed: {exc}") # exception esetén ROLLBACK az adatbázisban
+            self.notify(f"[ROLLBACK] Upload failed: {exc}") # exception esetén ROLLBACK az adatbázisban
             return False
 
     def summary(self) -> Dict[str, Any]:
@@ -288,6 +305,15 @@ class DatabaseService:
     def get_all_vectors_by_model(self, model_type: str):
         """Összes vektort lekérdező funkció meghívása"""
         return self.db.get_all_vectors_by_model(model_type)
+    
+class Logger(DatabaseObserver):
+    """Frissiíti a Streamlit session eseményeket"""
+    def update(self, message):
+        if "db_logs" not in st.session_state:
+            st.session_state.db_logs = []
+        
+        st.session_state.db_logs.insert(0, message)
+        st.session_state.db_logs = st.session_state.db_logs[:50]
 
 
 class VisualizationService:
@@ -1164,6 +1190,9 @@ class DigitRecognitionApp:
             self.visualizer,
             self.inference,
         )
+
+        ui_logger = Logger()
+        self.db_service.attach(ui_logger)
 
     def configure_page(self) -> None:
         """Oldal címe, ikonja"""
