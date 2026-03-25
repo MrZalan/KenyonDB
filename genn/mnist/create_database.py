@@ -33,13 +33,21 @@ class NpzStrategy(DataStrategy):
     """Npz adatok importálása"""
     def extract_data(self, file_path):
         data = np.load(file_path, allow_pickle=True)
-        return data
+        return {
+            'vectors': data['active_kc_ids'],
+            'labels': data['labels'],
+            'images': data['images']
+        }
 
 class PtStrategy(DataStrategy):
     """Pt adatok importálása"""
     def extract_data(self, file_path):
-        data = torch.load(pt_path, map_location='cpu', weights_only=False)
-        return data
+        data = torch.load(file_path, map_location='cpu', weights_only=False)
+        return {
+            'vectors': data['vectors'],
+            'labels': data['labels'],
+            'images': [img.numpy() for img in data['images']]
+        }
 
 class KenyonDB:
     """Sqlite adatbázis latent vektorok és metadata tárolásásra"""
@@ -137,40 +145,6 @@ class KenyonDB:
             conn.commit()
 
         print(f"Database cleared for model: {model_type}")
-
-
-    def populate_from_npz(self, npz_path, model_type):
-        """Felpopulálja az adatbázist .npz kiterjesztésű fájlból (mushroom body modell)"""
-        data = np.load(npz_path, allow_pickle=True)
-        vectors = data['active_kc_ids']
-        labels = data['labels']
-        images = data['images']
-
-        print(f"Indexing {len(vectors)} vectors from .npz file for model: {model_type}...")
-
-        # Ha mindegyik rekord rendben volt akkor COMMIT, ha bármikor hiba merül fel akkor ROLLBACK
-        with self.get_connection():
-            for i in range(len(vectors)):
-                self.add_new_record(labels[i], i, vectors[i], model_type, images[i])
-
-        print(f"npz population for {model_type} complete")
-
-    def populate_from_pytorch(self, pt_path, model_type):
-        """Felpopulálja az adatbázist .pt kiterjesztésű fájlból (echo state modellek)"""
-        data = torch.load(pt_path, map_location='cpu', weights_only=False)
-        vectors = data['vectors']
-        labels = data['labels']
-        images = data['images']
-
-        print(f"Indexing {len(vectors)} vectors from .pt file for model: {model_type}...")
-
-        with self.get_connection():
-            for i in range(len(vectors)):
-                image = images[i].numpy()            
-                self.add_new_record(labels[i], i, vectors[i], model_type, image)
-
-        print(f"pt population for {model_type} complete")
-
         
     def get_image_and_label(self, image_id):
         """Visszaadja az adatbázisban tárolt kép blob objektumát id alapján"""

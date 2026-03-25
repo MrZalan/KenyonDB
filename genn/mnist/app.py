@@ -18,7 +18,7 @@ from streamlit_drawable_canvas import st_canvas
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from create_database import KenyonDB
+from create_database import KenyonDB, NpzStrategy, PtStrategy
 from mushroom_body_class import MBConfig, MBSimulator, MushroomBodyModel, load_mnist
 from reservoir_models import ReservoirConfig, ReservoirModel, ReservoirTrainer, SparseConfig
 
@@ -237,14 +237,16 @@ class DatabaseService:
 
         model_type = self.registry.get_model_type_key(selected_model_name)
         saved_file_path = self.save_uploaded_latent_file(uploaded_file)
-        db = KenyonDB(self.paths.db_path)
+
+        strategies = {
+            ".npz": NpzStrategy(self.db),
+            ".pt": PtStrategy(self.db)
+        }
 
         try:
             file_ext = os.path.splitext(saved_file_path)[1].lower()
-            if file_ext == ".npz": # SNN modell esetén a populálás .npz kiterjesztésű fájlból történik
-                db.populate_from_npz(saved_file_path, model_type)
-            elif file_ext == ".pt": # Reservoir modellek esetén a populálás .pt kiterjesztésű fájlból történik
-                db.populate_from_pytorch(saved_file_path, model_type)
+            if file_ext in strategies:
+                strategies[file_ext].import_data(saved_file_path, model_type)
             else:
                 SessionManager.add_db_log(
                     f"[ERROR] Unsupported file type for {selected_model_name}: {uploaded_file.name}" # hibás fájl esetén logolás
@@ -252,7 +254,7 @@ class DatabaseService:
                 return False
 
             # Összesítő logok kiíratása
-            summary = db.get_database_summary()
+            summary = self.db.get_database_summary()
             model_summary = summary["models"][model_type]
             SessionManager.add_db_log(
                 f"[OK] {selected_model_name} <- {uploaded_file.name} | "
