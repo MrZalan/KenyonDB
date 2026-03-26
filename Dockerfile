@@ -48,7 +48,8 @@ RUN python -m pip install --no-cache-dir --break-system-packages \
     networkx \
     scikit-learn \
     mlflow \
-    optuna
+    optuna \
+    pytest
 
 # 5. Create app root and clone GeNN
 RUN mkdir -p ${APP_PATH}
