@@ -11,6 +11,7 @@ from resdag.layers import ReservoirLayer
 from typing import Optional, Dict, Any
 from torchvision import transforms
 from copy import deepcopy
+from sklearn.metrics import f1_score, recall_score
 
 
 def set_seed(seed: int = 42):
