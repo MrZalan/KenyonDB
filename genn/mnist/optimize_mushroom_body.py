@@ -65,12 +65,12 @@ def objective(trial):
             trainer = MBSimulator(train_model)
             trainer.train(train_imgs, train_labels)
 
-            trainer.mw.kc_mbon.vars["g"].pull_from_device()
-            trained_weights = np.copy(trainer.mw.kc_mbon.vars["g"].view)
-            trainer.mw.pn_kc.pull_connectivity_from_device()
+            trainer.model_wrapper.kc_mbon.vars["g"].pull_from_device()
+            trained_weights = np.copy(trainer.model_wrapper.kc_mbon.vars["g"].view)
+            trainer.model_wrapper.pn_kc.pull_connectivity_from_device()
             trained_indices = np.vstack((
-                trainer.mw.pn_kc.get_sparse_pre_inds(), 
-                trainer.mw.pn_kc.get_sparse_post_inds()
+                trainer.model_wrapper.pn_kc.get_sparse_pre_inds(), 
+                trainer.model_wrapper.pn_kc.get_sparse_post_inds()
             ))
 
             # Teszt fázis
