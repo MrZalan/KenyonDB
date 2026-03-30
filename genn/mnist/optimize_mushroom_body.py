@@ -3,29 +3,21 @@ import mlflow
 import numpy as np
 import shutil
 import os
-from mushroom_body_class import MushroomBodyModel, MBSimulator, MBConfig, _load_mnist
+from mushroom_body_class import MushroomBodyModel, MBSimulator, MBConfig, load_mnist
 
-# --- Configuration ---
 STUDY_NAME = "mushroom_body_full_search"
-N_TRIALS = 100
+N_TRIALS = 100 # iterációk száma
 
 def objective(trial):
-    # 1. Suggest ALL Parameters from MBConfig (except fixed architecture sizes)
+    # Keresési tér meghatározása a paraméterekhez
     params = {
-        # Simulation & Input
         "PRESENT_TIME_MS": trial.suggest_float("PRESENT_TIME_MS", 10.0, 40.0),
         "INPUT_SCALE": trial.suggest_float("INPUT_SCALE", 50.0, 120.0),
-        
-        # Architecture / Connectivity
         "NUM_KC": trial.suggest_int("NUM_KC", 10000, 40000, step=5000),
         "PN_KC_FAN_IN": trial.suggest_int("PN_KC_FAN_IN", 10, 30),
-        
-        # Neuron Dynamics (LIF)
         "Vthresh": trial.suggest_float("Vthresh", -55.0, -45.0),
         "TauM": trial.suggest_float("TauM", 10.0, 30.0),
         "PN_REFRAC": trial.suggest_float("PN_REFRAC", 50.0, 150.0),
-        
-        # Synaptic Weights & Time Constants
         "PN_KC_WEIGHT": trial.suggest_float("PN_KC_WEIGHT", 0.05, 0.5),
         "PN_KC_TAU": trial.suggest_float("PN_KC_TAU", 1.0, 10.0),
         "KC_GGN_WEIGHT": trial.suggest_float("KC_GGN_WEIGHT", 0.1, 2.0),
@@ -33,15 +25,13 @@ def objective(trial):
         "GGN_KC_TAU": trial.suggest_float("GGN_KC_TAU", 2.0, 10.0),
         "KC_MBON_TAU": trial.suggest_float("KC_MBON_TAU", 1.0, 10.0),
         "MBON_STIMULUS_CURRENT": trial.suggest_float("MBON_STIMULUS_CURRENT", 1.0, 10.0),
-        
-        # R-STDP Learning Params
         "eta": trial.suggest_float("eta", 1e-6, 1e-4, log=True),
         "tauE": trial.suggest_float("tauE", 50.0, 500.0),
         "rho": trial.suggest_float("rho", 0.001, 0.05),
         "wMax": trial.suggest_float("wMax", 0.01, 0.05),
     }
 
-    # 2. Update MBConfig dynamically
+    # Paraméterek frissítése az MBConfigban
     MBConfig.PRESENT_TIME_MS = params["PRESENT_TIME_MS"]
     MBConfig.INPUT_SCALE = params["INPUT_SCALE"]
     MBConfig.NUM_KC = params["NUM_KC"]
@@ -67,15 +57,14 @@ def objective(trial):
         mlflow.log_params(params)
         
         try:
-            train_imgs, train_labels, test_imgs, test_labels = _load_mnist()
+            # Tréning fázis
+            train_imgs, train_labels, test_imgs, test_labels = load_mnist()
 
-            # --- Training ---
             train_model = MushroomBodyModel(name=f"{model_name}_train", is_training=True)
             train_model.build_and_load()
             trainer = MBSimulator(train_model)
             trainer.train(train_imgs, train_labels)
 
-            # Capture weights/indices
             trainer.mw.kc_mbon.vars["g"].pull_from_device()
             trained_weights = np.copy(trainer.mw.kc_mbon.vars["g"].view)
             trainer.mw.pn_kc.pull_connectivity_from_device()
@@ -84,7 +73,7 @@ def objective(trial):
                 trainer.mw.pn_kc.get_sparse_post_inds()
             ))
 
-            # --- Evaluation ---
+            # Teszt fázis
             eval_model = MushroomBodyModel(
                 name=f"{model_name}_eval",
                 is_training=False,
@@ -93,9 +82,14 @@ def objective(trial):
             )
             eval_model.build_and_load()
             evaluator = MBSimulator(eval_model)
-            accuracy = evaluator.evaluate(test_imgs, test_labels)
+            accuracy, f1, recall = evaluator.evaluate(test_imgs, test_labels)
+            mlflow.log_metrics({
+                "accuracy": accuracy,
+                "f1_score": f1,
+                "recall": recall
+            })
 
-            # --- Save Best Logic ---
+            # Legjobb modell státusz frissítése
             if trial.number == 0 or accuracy > study.best_value:
                 np.save(f"best_weights_trial_{trial.number}.npy", trained_weights)
                 np.save(f"best_indices_trial_{trial.number}.npy", trained_indices)
@@ -104,14 +98,13 @@ def objective(trial):
             return accuracy
 
         finally:
-            # Clean up compiled C++/CUDA code folders
+            # Modellekhez generált c++ és cuda fájlok feltakarítása
             shutil.rmtree(f"{model_name}_train_CODE", ignore_errors=True)
             shutil.rmtree(f"{model_name}_eval_CODE", ignore_errors=True)
 
 if __name__ == "__main__":
     mlflow.set_experiment(STUDY_NAME)
     
-    # In-memory study
     study = optuna.create_study(direction="maximize")
     
     print(f"Starting search across {N_TRIALS} trials on full MNIST.")

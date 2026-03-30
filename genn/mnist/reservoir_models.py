@@ -150,15 +150,18 @@ class ReservoirTrainer:
                 total += x.size(0)
 
             # Epoch végén validáció
-            test_acc = self.evaluate(test_loader)
+            metrics = self.evaluate(test_loader)
+            test_acc = metrics["accuracy"]
             train_loss = total_loss / total
             train_acc = correct / total
 
             print(
                 f"Epoch {epoch:02d} | "
-                f"loss={train_loss:.4f} | "
-                f"train_acc={train_acc:.4f} | "
-                f"test_acc={test_acc:.4f}"
+                f"Loss: {train_loss:.4f} | "
+                f"Train Acc: {train_acc:.4f}% | "
+                f"Test Acc: {test_acc:.4f}% | "
+                f"F1: {metrics['f1']:.4f} | "
+                f"Recall: {metrics['recall']:.4f}"
             )
 
             # Early stopping mechanizmusa
@@ -166,6 +169,7 @@ class ReservoirTrainer:
 
             if improved:
                 best_test_acc = test_acc
+                best_metrics = metrics
                 best_epoch = epoch
                 epochs_without_improvement = 0
                 if self.cfg.restore_best_weights:
@@ -186,7 +190,7 @@ class ReservoirTrainer:
             print(f"Restored best model weights from epoch {best_epoch}")
 
         return {
-            "best_test_acc": best_test_acc,
+            "best_metrics": best_metrics,
             "best_epoch": best_epoch,
             "stopped_early": epochs_without_improvement >= self.cfg.early_stopping_patience,
         }
