@@ -72,7 +72,7 @@ class MushroomBodyModel:
     def __init__(
         self,
         name: str,
-        backend: str = "single_threaded_cpu",
+        backend: str = "cuda", #"single_threaded_cpu",
         is_training: bool = True,
         sparse_indices=None,
         kc_mbon_g=None,
@@ -114,9 +114,9 @@ class MushroomBodyModel:
             vars=[("g", "scalar"), ("e", "scalar")],
             extra_global_params=[("reward", "scalar*")],
             synapse_dynamics_code=r"""
-                e *= exp(-dt / tauE); # felejtés, a memória halványodása
-                const scalar R = reward[id_post]; # jutalom beolvasása ha a hálózat eltalálta a helyes számjegyet
-                g = fmin(wMax, fmax(wMin, g + (eta * R * e * dt))); # a kapcsolat megerősödése vagy gyengülése attól függően hogy R pozitív vagy negatív
+                e *= exp(-dt / tauE); // felejtés, a memória halványodása
+                const scalar R = reward[id_post]; // jutalom beolvasása ha a hálózat eltalálta a helyes számjegyet
+                g = fmin(wMax, fmax(wMin, g + (eta * R * e * dt))); // a kapcsolat megerősödése vagy gyengülése attól függően hogy R pozitív vagy negatív
             """,
             # a kapcsolat fontos ha kevés idő telt el a preszinaptikus és posztszinaptikus tüzelés között
             pre_spike_syn_code="addToPost(g); const scalar d = t - st_post; e += (exp(-d / tau) - rho);",
