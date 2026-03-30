@@ -199,6 +199,7 @@ class ReservoirTrainer:
         for x, y in loader:
             x, y = x.to(self.device), y.to(self.device)
             logits, _ = self.model(x.squeeze(1))
+            preds = logits.argmax(dim=1)
 
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(y.cpu().numpy())
