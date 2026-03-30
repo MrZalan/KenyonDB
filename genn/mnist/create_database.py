@@ -17,6 +17,12 @@ class DataStrategy(ABC):
     def import_data(self, file_path, model_type):
         data = self.extract_data(file_path)
 
+        if data['model_type'] and data['model_type'] != model_type:
+            raise ValueError(
+                f"Import failed: File signature is '{data['model_type']}', "
+                f"but target model is '{model_type}'."
+            )
+
         vectors = data['vectors']
         labels = data['labels']
         images = data['images']
@@ -36,7 +42,8 @@ class NpzStrategy(DataStrategy):
         return {
             'vectors': data['active_kc_ids'],
             'labels': data['labels'],
-            'images': data['images']
+            'images': data['images'],
+            'model_type': data.get('model_type')
         }
 
 class PtStrategy(DataStrategy):
@@ -46,7 +53,8 @@ class PtStrategy(DataStrategy):
         return {
             'vectors': data['vectors'],
             'labels': data['labels'],
-            'images': [img.numpy() for img in data['images']]
+            'images': [img.numpy() for img in data['images']],
+            'model_type': data.get('model_type')
         }
 
 class KenyonDB:

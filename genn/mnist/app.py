@@ -67,6 +67,13 @@ class AppConfig:
     MODEL_LABEL_ORDER = list(MODEL_LABELS.keys())
     MODEL_KEY_TO_NAME = {value: key for key, value in MODEL_LABELS.items()}
 
+    MODEL_EXTENSIONS = {
+        "mb": [".npz"],
+        "ws": [".pt"],
+        "ba": [".pt"],
+        "er": [".pt"],
+    }
+
     @classmethod
     def topology_map(cls) -> Dict[str, Tuple[str, str]]:
         return {
@@ -149,6 +156,10 @@ class SessionManager:
             st.session_state.selected_model = model_order[0]
         if "result_count" not in st.session_state:
             st.session_state.result_count = 5
+
+    @staticmethod
+    def clear_logs() -> None
+        st.session_state.db_logs = []
 
 
 
@@ -291,8 +302,13 @@ class DatabaseService:
             ".pt": PtStrategy(self.db)
         }
 
+        allowed = self.registry.config.MODEL_EXTENSIONS.get(model_type, [])
+
         try:
             file_ext = os.path.splitext(saved_file_path)[1].lower()
+            if file_ext not in allowed:
+                self.notify(f"[ERROR] Model mismatch: {model_type} requires {allowed}, but got {file_ext}")
+                return False
             if file_ext in strategies:
                 strategies[file_ext].import_data(saved_file_path, model_type)
             else:
@@ -300,6 +316,10 @@ class DatabaseService:
                     f"[ERROR] Unsupported file type for {selected_model_name}: {uploaded_file.name}" # hibás fájl esetén logolás
                 )
                 return False
+
+            self.notify(f"[INFO] Replacing existing data for {selected_model_name}")
+            self.db.clear_database_by_model(model_type)
+            strategies[file_ext].import_data(saved_file_path, model_type)
 
             # Összesítő logok kiíratása
             summary = self.db.get_database_summary()
@@ -320,6 +340,7 @@ class DatabaseService:
     def clear_model_data(self, model_key: str) -> None:
         """Kiválasztott modell törlés funkciójának meghívása"""
         self.db.clear_database_by_model(model_key)
+        self.notify(f"[OK] Cleared database for model: {model_key}")
 
     def get_record_by_image_id(self, image_id: int) -> Optional[Dict[str, Any]]:
         """Rekord lekérdezése image id alapján funkció meghívása"""
@@ -732,7 +753,7 @@ class SnnStrategy(ModelStrategy):
         active_kcs = inf_result["active_kcs"]
         spike_data = inf_result["spike_data"]
 
-        payload_builder.add_prediction(prediction).add_visualization(hero_fig=self.visualizer.plot_mb_raster(spike_data),
+        payload_builder.add_prediction(prediction).add_visualizations(hero_fig=self.visualizer.plot_mb_raster(spike_data),
                         secondary_fig=self.visualizer.plot_mbon_activity(spike_data))\
                         .add_metrics({
             "PN spikes": len(spike_data["pn"]["ids"]),
@@ -910,9 +931,9 @@ class InferenceService:
         for model_key in ["mb", "ws", "ba", "er"]:
             try:
                 self.visualizer.compute_cached_global_umap_bundle(self.paths.db_path, model_key)
-                SessionManager.add_db_log(f"[OK] UMAP cached for {model_key}")
+                self.db:db_service.notify(f"[OK] UMAP cached for {model_key}")
             except Exception as exc:
-                SessionManager.add_db_log(f"[WARN] UMAP cache failed for {model_key}: {exc}")
+                self.db_service.notify(f"[WARN] UMAP cache failed for {model_key}: {exc}")
 
 
 class StreamlitRenderer:
@@ -1072,7 +1093,6 @@ class StreamlitRenderer:
         k2.metric("Matches", len(payload.results))
         k3.metric("Model", payload.model_type_key.upper())
 
-        st.caption(payload.latent_info or "")
 
         if payload.summary_metrics:
             cols = st.columns(len(payload.summary_metrics))
@@ -1090,24 +1110,22 @@ class StreamlitRenderer:
                 st.subheader("Secondary activity view")
                 st.plotly_chart(payload.secondary_fig, use_container_width=True)
 
-        mid_left, mid_right = st.columns(2)
-        with mid_left.container(border=True):
+        with st.container(border=True):
             st.subheader("Global latent space")
             if payload.umap_fig is not None:
                 st.plotly_chart(payload.umap_fig, use_container_width=True)
             else:
                 st.info("UMAP could not be generated for this model yet.")
 
-        with mid_right.container(border=True):
+        with st.container(border=True):
             st.subheader("Confusion matrix")
             if payload.cm_fig is not None:
                 st.plotly_chart(payload.cm_fig, use_container_width=True)
 
         if payload.fig_overlap is not None and payload.fig_scores is not None:
-            metric_left, metric_right = st.columns(2)
-            with metric_left.container(border=True):
+            with st.container(border=True):
                 st.plotly_chart(payload.fig_overlap, use_container_width=True)
-            with metric_right.container(border=True):
+            with st.container(border=True):
                 st.plotly_chart(payload.fig_scores, use_container_width=True)
 
         self.render_similarity_result_cards(payload.results)
@@ -1149,14 +1167,21 @@ class StreamlitRenderer:
         # Adatbázis fájlok feltöltése
         with data_left.container(border=True):
             st.subheader("Upload latent vectors")
-            st.caption("You can upload one file for each model and populate the database in one pass.")
+            st.caption("You can upload one file for each model which will replace its original data")
+
+            db_selected_model = st.selectbox(
+                "Choose model to populate",
+                self.config.MODEL_LABEL_ORDER,
+                key="db_selected_model"
+            )
 
             uploaded_files = {}
             for model_name in self.config.MODEL_LABEL_ORDER:
                 model_key = self.registry.get_model_type_key(model_name)
+                allowed_types = self.config.MODEL_EXTENSIONS.get(model_key, ["npz", "pt"])
                 uploaded_files[model_name] = st.file_uploader(
                     f"{model_name} ({model_key})",
-                    type=["npz", "pt", "pth"],
+                    type=allowed_types,
                     key=f"uploader_{model_key}",
                     help="The file should contain vectors, labels, and optionally images.",
                 )
@@ -1165,7 +1190,8 @@ class StreamlitRenderer:
 
             # Adatbázis felpopulálása
             up1, up2 = st.columns(2)
-            if up1.button("Populate all model files", use_container_width=True):
+            if up1.button("Replace all model files", use_container_width=True):
+                SessionManager.clear_logs()
                 success_count = 0
                 for model_name in self.config.MODEL_LABEL_ORDER:
                     success_count += int(self.db_service.populate_from_uploaded_file(uploaded_files[model_name], model_name))
@@ -1176,8 +1202,9 @@ class StreamlitRenderer:
                 else:
                     st.warning("No model files were populated.")
 
-            if up2.button("Populate selected model", use_container_width=True):
-                model_name = st.session_state.selected_model
+            if up2.button("Replace selected model data", use_container_width=True):
+                SessionManager.clear_logs()
+                model_name = db_selected_model
                 if self.db_service.populate_from_uploaded_file(uploaded_files.get(model_name), model_name):
                     st.success(f"Database update completed for {model_name}.")
                     st.cache_resource.clear()
@@ -1195,6 +1222,7 @@ class StreamlitRenderer:
                 if not confirm_delete:
                     st.warning("Please confirm deletion using the checkbox.")
                 else:
+                    SessionManager.clear_logs()
                     try:
                         self.db_service.clear_model_data(model_to_delete)
                         st.cache_resource.clear()

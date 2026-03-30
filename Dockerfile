@@ -71,4 +71,8 @@ RUN chmod -R 777 ${APP_PATH}
 
 EXPOSE 7860
 
-CMD ["streamlit", "run", "mnist/app.py", "--server.address=0.0.0.0", "--server.port=7860"]
+# Run app
+#CMD ["streamlit", "run", "mnist/app.py", "--server.address=0.0.0.0", "--server.port=7860"]
+
+# For testing
+CMD ["/bin/bash"]

@@ -408,7 +408,7 @@ class MBSimulator:
         self.run_image(image, label=None)
 
         # Adatok mentése a GPU-ról
-        self.mw.model.pull_recording_buffers_from_device()
+        self.model_wrapper.model.pull_recording_buffers_from_device()
 
         _, kc_spike_ids = self.model_wrapper.kc.spike_recording_data[0]
         active_kcs = np.unique(kc_spike_ids).astype(np.uint32)
@@ -419,9 +419,9 @@ class MBSimulator:
             predicted_label = int(mbon_spike_ids[np.argmin(mbon_spike_times)])
 
         # Értékek visszaállítása
-        self.mw.model.custom_update("reset_group")
-        self.mw.mbon_input.vars["magnitude"].view[:] = 0.0
-        self.mw.mbon_input.vars["magnitude"].push_to_device()
+        self.model_wrapper.model.custom_update("reset_group")
+        self.model_wrapper.mbon_input.vars["magnitude"].view[:] = 0.0
+        self.model_wrapper.mbon_input.vars["magnitude"].push_to_device()
 
         return active_kcs, predicted_label
 
@@ -449,6 +449,7 @@ class MBSimulator:
             "predictions": np.array(predictions, dtype=np.int32),
             "labels": np.array(stored_labels),
             "images": np.array(stored_images),
+            "model_type": "mb"
         }
 
     def save_model_params(self, weights_path="kc_mbon_g.npy", indices_path="pn_kc_ind.npy"):

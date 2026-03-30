@@ -194,18 +194,33 @@ class ReservoirTrainer:
     def evaluate(self, loader: DataLoader) -> float:
         """Tesztelési fázis"""
         self.model.eval()
-        correct, total = 0, 0
+        all_preds = []
+        all_labels = []
         for x, y in loader:
             x, y = x.to(self.device), y.to(self.device)
             logits, _ = self.model(x.squeeze(1))
-            correct += (logits.argmax(dim=1) == y).sum().item()
-            total += x.size(0)
+
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
+
+        accuracy = (np.array(all_preds) == np.array(all_labels)).mean() * 100.0
+        f1 = f1_score(all_labels, all_preds, average='weighted')
+        recall = recall_score(all_labels, all_preds, average='weighted')
+
+        print(f"Accuracy: {accuracy:.4f}%")
+        print(f"F1-score: {f1:.4f}")
+        print(f"Recall: {recall:.4f}")
+
         self.model.train()
-        return correct / total
+        return {
+            "accuracy": accuracy,
+            "f1": f1,
+            "recall": recall
+        }
 
     def load_weights(self, path: str):
         """Elmentett súlyok betöltése"""
-        self.model.load_state_dict(torch.load(path, map_location=self.device))
+        self.model.load_state_dict(torch.load(path, map_location=self.device, weights_only=False))
         self.model.eval()
         print(f"Weights loaded from {path}")
 
@@ -237,7 +252,7 @@ class ReservoirTrainer:
         }
 
     @torch.no_grad()
-    def save_latent_indices_with_images(self, loader: DataLoader, topk: int = 64):
+    def save_latent_indices_with_images(self, loader: DataLoader, model_type: str, topk: int = 64):
         """Latent vektorok kinyerése címkékkel és képekkel"""
         self.model.eval()
         all_ind, all_y, all_imgs = [], [], []
@@ -259,5 +274,6 @@ class ReservoirTrainer:
         return {
             "vectors": torch.cat(all_ind, 0),
             "labels": torch.cat(all_y, 0),
-            "images": torch.cat(all_imgs, 0)
+            "images": torch.cat(all_imgs, 0),
+            "model_type": model_type
         }
