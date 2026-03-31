@@ -67,7 +67,7 @@ def objective(trial):
         "GGN_KC_WEIGHT": trial.suggest_float("GGN_KC_WEIGHT", -11.0, -6.0),
         "GGN_KC_TAU": trial.suggest_float("GGN_KC_TAU", 2.0, 7.0),
         "KC_MBON_TAU": trial.suggest_float("KC_MBON_TAU", 1.0, 4.0),
-        "MBON_STIMULUS": trial.suggest_float("MBON_STIMULUS", 3.0, 9.5),
+        "MBON_STIMULUS_CURRENT": trial.suggest_float("MBON_STIMULUS_CURRENT", 3.0, 9.5),
         "eta": trial.suggest_float("eta", 1e-6, 4e-5, log=True),
         "tauE": trial.suggest_float("tauE", 80.0, 500.0),
         "rho": trial.suggest_float("rho", 0.001, 0.005),
