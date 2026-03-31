@@ -5,12 +5,12 @@ import shutil
 import os
 from mushroom_body_class import MushroomBodyModel, MBSimulator, MBConfig, load_mnist
 
-STUDY_NAME = "mushroom_body_full_search"
+STUDY_NAME = "mushroom_body_full_search_round_2"
 N_TRIALS = 100 # iterációk száma
 
 def objective(trial):
     # Keresési tér meghatározása a paraméterekhez
-    params = {
+    params_r1 = {
         "PRESENT_TIME_MS": trial.suggest_float("PRESENT_TIME_MS", 10.0, 40.0),
         "INPUT_SCALE": trial.suggest_float("INPUT_SCALE", 50.0, 120.0),
         "NUM_KC": trial.suggest_int("NUM_KC", 10000, 40000, step=5000),
@@ -31,30 +31,52 @@ def objective(trial):
         "wMax": trial.suggest_float("wMax", 0.01, 0.05),
     }
 
+    # Mlflow adatok alapján szűkített keresési tér második futtatáshoz
+    params_r2 = {
+        "PRESENT_TIME_MS": trial.suggest_float("PRESENT_TIME_MS", 20.0, 35.0),
+        "INPUT_SCALE": trial.suggest_float("INPUT_SCALE", 85.0, 100.0),
+        "NUM_KC": trial.suggest_int("NUM_KC", 30000, 50000, step=5000),
+        "PN_KC_FAN_IN": trial.suggest_int("PN_KC_FAN_IN", 18, 22),
+        "Vthresh": trial.suggest_float("Vthresh", -53.0, -48.0),
+        "TauM": trial.suggest_float("TauM", 25.0, 32.0),
+        "PN_REFRAC": trial.suggest_float("PN_REFRAC", 65.0, 95.0),
+        "PN_KC_WEIGHT": trial.suggest_float("PN_KC_WEIGHT", 0.1, 0.2),
+        "PN_KC_TAU": trial.suggest_float("PN_KC_TAU", 2.0, 5.0),
+        "KC_GGN_WEIGHT": trial.suggest_float("KC_GGN_WEIGHT", 1.8, 2.2),
+        "GGN_KC_WEIGHT": trial.suggest_float("GGN_KC_WEIGHT", -9.0, -6.0),
+        "GGN_KC_TAU": trial.suggest_float("GGN_KC_TAU", 6.5, 8.5),
+        "KC_MBON_TAU": trial.suggest_float("KC_MBON_TAU", 4.5, 6.0),
+        "MBON_STIMULUS_CURRENT": trial.suggest_float("MBON_STIMULUS_CURRENT", 2.5, 5.5),
+        "eta": trial.suggest_float("eta", 1e-6, 5e-5, log=True),
+        "tauE": trial.suggest_float("tauE", 200.0, 450.0),
+        "rho": trial.suggest_float("rho", 0.001, 0.005),
+        "wMax": trial.suggest_float("wMax", 0.03, 0.045),
+    }
+
     # Paraméterek frissítése az MBConfigban
-    MBConfig.PRESENT_TIME_MS = params["PRESENT_TIME_MS"]
-    MBConfig.INPUT_SCALE = params["INPUT_SCALE"]
-    MBConfig.NUM_KC = params["NUM_KC"]
-    MBConfig.PN_KC_FAN_IN = params["PN_KC_FAN_IN"]
-    MBConfig.LIF_PARAMS["Vthresh"] = params["Vthresh"]
-    MBConfig.LIF_PARAMS["TauM"] = params["TauM"]
-    MBConfig.PN_REFRAC = params["PN_REFRAC"]
-    MBConfig.PN_KC_WEIGHT = params["PN_KC_WEIGHT"]
-    MBConfig.PN_KC_TAU = params["PN_KC_TAU"]
-    MBConfig.KC_GGN_WEIGHT = params["KC_GGN_WEIGHT"]
-    MBConfig.GGN_KC_WEIGHT = params["GGN_KC_WEIGHT"]
-    MBConfig.GGN_KC_TAU = params["GGN_KC_TAU"]
-    MBConfig.KC_MBON_TAU = params["KC_MBON_TAU"]
-    MBConfig.MBON_STIMULUS_CURRENT = params["MBON_STIMULUS_CURRENT"]
+    MBConfig.PRESENT_TIME_MS = params_r2["PRESENT_TIME_MS"]
+    MBConfig.INPUT_SCALE = params_r2["INPUT_SCALE"]
+    MBConfig.NUM_KC = params_r2["NUM_KC"]
+    MBConfig.PN_KC_FAN_IN = params_r2["PN_KC_FAN_IN"]
+    MBConfig.LIF_PARAMS["Vthresh"] = params_r2["Vthresh"]
+    MBConfig.LIF_PARAMS["TauM"] = params_r2["TauM"]
+    MBConfig.PN_REFRAC = params_r2["PN_REFRAC"]
+    MBConfig.PN_KC_WEIGHT = params_r2["PN_KC_WEIGHT"]
+    MBConfig.PN_KC_TAU = params_r2["PN_KC_TAU"]
+    MBConfig.KC_GGN_WEIGHT = params_r2["KC_GGN_WEIGHT"]
+    MBConfig.GGN_KC_WEIGHT = params_r2["GGN_KC_WEIGHT"]
+    MBConfig.GGN_KC_TAU = params_r2["GGN_KC_TAU"]
+    MBConfig.KC_MBON_TAU = params_r2["KC_MBON_TAU"]
+    MBConfig.MBON_STIMULUS_CURRENT = params_r2["MBON_STIMULUS_CURRENT"]
     MBConfig.KC_MBON_PARAMS.update({
-        "eta": params["eta"], "tauE": params["tauE"], 
-        "rho": params["rho"], "wMax": params["wMax"]
+        "eta": params_r2["eta"], "tauE": params_r2["tauE"], 
+        "rho": params_r2["rho"], "wMax": params_r2["wMax"]
     })
 
     model_name = f"trial_{trial.number}"
     
     with mlflow.start_run(run_name=f"Trial_{trial.number}", nested=True):
-        mlflow.log_params(params)
+        mlflow.log_params(params_r2)
         
         try:
             # Tréning fázis
@@ -111,7 +133,7 @@ if __name__ == "__main__":
     study.optimize(objective, n_trials=N_TRIALS)
 
     print("\n" + "="*30)
-    print(f"BEST ACCURACY: {study.best_value:.2f}%")
+    print(f"BEST ACCURACY: {study.best_value:.4f}%")
     print("BEST PARAMETERS:")
     for k, v in study.best_params.items():
         print(f"  {k}: {v}")
