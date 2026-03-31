@@ -5,8 +5,8 @@ import shutil
 import os
 from mushroom_body_class import MushroomBodyModel, MBSimulator, MBConfig, load_mnist
 
-STUDY_NAME = "mushroom_body_full_search_round_2"
-N_TRIALS = 100 # iterációk száma
+STUDY_NAME = "mushroom_body_full_search_round_3"
+N_TRIALS = 150 # iterációk száma
 
 def objective(trial):
     # Keresési tér meghatározása a paraméterekhez
@@ -53,30 +53,51 @@ def objective(trial):
         "wMax": trial.suggest_float("wMax", 0.03, 0.045),
     }
 
+    params_r3 = {
+        "PRESENT_TIME_MS": trial.suggest_float("PRESENT_TIME_MS", 15.0, 25.0),
+        "INPUT_SCALE": trial.suggest_float("INPUT_SCALE", 70.0, 95.0),
+        "NUM_KC": trial.suggest_int("NUM_KC", 35000, 45000, step=5000),
+        "PN_KC_FAN_IN": trial.suggest_int("PN_KC_FAN_IN", 10, 32), 
+        "PN_KC_WEIGHT": trial.suggest_float("PN_KC_WEIGHT", 0.08, 0.25),
+        "PN_KC_TAU": trial.suggest_float("PN_KC_TAU", 6.5, 9.0),
+        "PN_REFRAC": trial.suggest_float("PN_REFRAC", 50.0, 120.0),
+        "Vthresh": trial.suggest_float("Vthresh", -50.0, -45.0),
+        "TauM": trial.suggest_float("TauM", 13.0, 25.0),
+        "KC_GGN_WEIGHT": trial.suggest_float("KC_GGN_WEIGHT", 1.4, 2.0),
+        "GGN_KC_WEIGHT": trial.suggest_float("GGN_KC_WEIGHT", -11.0, -6.0),
+        "GGN_KC_TAU": trial.suggest_float("GGN_KC_TAU", 2.0, 7.0),
+        "KC_MBON_TAU": trial.suggest_float("KC_MBON_TAU", 1.0, 4.0),
+        "MBON_STIMULUS": trial.suggest_float("MBON_STIMULUS", 3.0, 9.5),
+        "eta": trial.suggest_float("eta", 1e-6, 4e-5, log=True),
+        "tauE": trial.suggest_float("tauE", 80.0, 500.0),
+        "rho": trial.suggest_float("rho", 0.001, 0.005),
+        "wMax": trial.suggest_float("wMax", 0.03, 0.05),
+    }
+
     # Paraméterek frissítése az MBConfigban
-    MBConfig.PRESENT_TIME_MS = params_r2["PRESENT_TIME_MS"]
-    MBConfig.INPUT_SCALE = params_r2["INPUT_SCALE"]
-    MBConfig.NUM_KC = params_r2["NUM_KC"]
-    MBConfig.PN_KC_FAN_IN = params_r2["PN_KC_FAN_IN"]
-    MBConfig.LIF_PARAMS["Vthresh"] = params_r2["Vthresh"]
-    MBConfig.LIF_PARAMS["TauM"] = params_r2["TauM"]
-    MBConfig.PN_REFRAC = params_r2["PN_REFRAC"]
-    MBConfig.PN_KC_WEIGHT = params_r2["PN_KC_WEIGHT"]
-    MBConfig.PN_KC_TAU = params_r2["PN_KC_TAU"]
-    MBConfig.KC_GGN_WEIGHT = params_r2["KC_GGN_WEIGHT"]
-    MBConfig.GGN_KC_WEIGHT = params_r2["GGN_KC_WEIGHT"]
-    MBConfig.GGN_KC_TAU = params_r2["GGN_KC_TAU"]
-    MBConfig.KC_MBON_TAU = params_r2["KC_MBON_TAU"]
-    MBConfig.MBON_STIMULUS_CURRENT = params_r2["MBON_STIMULUS_CURRENT"]
+    MBConfig.PRESENT_TIME_MS = params_r3["PRESENT_TIME_MS"]
+    MBConfig.INPUT_SCALE = params_r3["INPUT_SCALE"]
+    MBConfig.NUM_KC = params_r3["NUM_KC"]
+    MBConfig.PN_KC_FAN_IN = params_r3["PN_KC_FAN_IN"]
+    MBConfig.LIF_PARAMS["Vthresh"] = params_r3["Vthresh"]
+    MBConfig.LIF_PARAMS["TauM"] = params_r3["TauM"]
+    MBConfig.PN_REFRAC = params_r3["PN_REFRAC"]
+    MBConfig.PN_KC_WEIGHT = params_r3["PN_KC_WEIGHT"]
+    MBConfig.PN_KC_TAU = params_r3["PN_KC_TAU"]
+    MBConfig.KC_GGN_WEIGHT = params_r3["KC_GGN_WEIGHT"]
+    MBConfig.GGN_KC_WEIGHT = params_r3["GGN_KC_WEIGHT"]
+    MBConfig.GGN_KC_TAU = params_r3["GGN_KC_TAU"]
+    MBConfig.KC_MBON_TAU = params_r3["KC_MBON_TAU"]
+    MBConfig.MBON_STIMULUS_CURRENT = params_r3["MBON_STIMULUS_CURRENT"]
     MBConfig.KC_MBON_PARAMS.update({
-        "eta": params_r2["eta"], "tauE": params_r2["tauE"], 
-        "rho": params_r2["rho"], "wMax": params_r2["wMax"]
+        "eta": params_r3["eta"], "tauE": params_r3["tauE"], 
+        "rho": params_r3["rho"], "wMax": params_r3["wMax"]
     })
 
     model_name = f"trial_{trial.number}"
     
     with mlflow.start_run(run_name=f"Trial_{trial.number}", nested=True):
-        mlflow.log_params(params_r2)
+        mlflow.log_params(params_r3)
         
         try:
             # Tréning fázis
