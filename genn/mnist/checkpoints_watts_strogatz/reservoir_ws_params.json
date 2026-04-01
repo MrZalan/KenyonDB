@@ -1,24 +1,28 @@
 {
   "topology_type": "watts_strogatz",
-  "accuracy": 0.9128,
-  "trial_number": 11,
+  "metrics": {
+    "accuracy": 90.86,
+    "f1": 0.9087446446785239,
+    "recall": 0.9086
+  },
+  "trial_number": 49,
   "res_cfg": {
-    "size": 500,
+    "size": 1500,
     "feedback_size": 28,
-    "spectral_radius": 1.0847207712441698,
-    "leak_rate": 0.1119513247543345,
+    "spectral_radius": 1.351080618717324,
+    "leak_rate": 0.1293238948972883,
     "topology_type": "watts_strogatz",
     "topology_params": {
       "k": 9,
-      "p": 0.32990169111575335
+      "p": 0.28948731574699915
     }
   },
   "sparse_cfg": {
-    "reservoir_dim": 500,
-    "sparse_dim": 4096,
-    "sh_lambda": 0.19192290025351547,
-    "l1_alpha": 0.002623931221135725,
-    "lr": 0.0001050315729946887,
+    "reservoir_dim": 1500,
+    "sparse_dim": 1024,
+    "sh_lambda": 0.17432430117936304,
+    "l1_alpha": 0.002782323795921989,
+    "lr": 0.0002650353118204295,
     "epochs": 15,
     "early_stopping_patience": 4,
     "early_stopping_min_delta": 0.0001,

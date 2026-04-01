@@ -1,23 +1,27 @@
 {
   "topology_type": "erdos_renyi",
-  "accuracy": 0.9085,
-  "trial_number": 22,
+  "metrics": {
+    "accuracy": 92.35,
+    "f1": 0.9235695391919704,
+    "recall": 0.9235
+  },
+  "trial_number": 33,
   "res_cfg": {
-    "size": 2000,
+    "size": 500,
     "feedback_size": 28,
-    "spectral_radius": 1.34645788335561,
-    "leak_rate": 0.19280425485965724,
+    "spectral_radius": 1.4318853028910616,
+    "leak_rate": 0.1543190260814057,
     "topology_type": "erdos_renyi",
     "topology_params": {
-      "p": 0.013621217646535823
+      "p": 0.0431225285534752
     }
   },
   "sparse_cfg": {
-    "reservoir_dim": 2000,
-    "sparse_dim": 3072,
-    "sh_lambda": 0.08319494298054568,
-    "l1_alpha": 0.0002390562760475654,
-    "lr": 0.0006156603914687345,
+    "reservoir_dim": 500,
+    "sparse_dim": 2048,
+    "sh_lambda": 0.15894456100530266,
+    "l1_alpha": 0.009233358582840391,
+    "lr": 0.0002178627990780692,
     "epochs": 15,
     "early_stopping_patience": 4,
     "early_stopping_min_delta": 0.0001,

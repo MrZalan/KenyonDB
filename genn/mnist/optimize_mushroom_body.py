@@ -132,10 +132,24 @@ def objective(trial):
                 "recall": recall
             })
 
-            # Legjobb modell státusz frissítése
-            if trial.number == 0 or accuracy > study.best_value:
-                np.save(f"best_weights_trial_{trial.number}.npy", trained_weights)
-                np.save(f"best_indices_trial_{trial.number}.npy", trained_indices)
+            w_file = f"weights_trial_{trial.number}.npy"
+            i_file = f"indices_trial_{trial.number}.npy"
+            np.save(w_file, trained_weights)
+            np.save(i_file, trained_indices)
+            mlflow.log_artifact(w_file)
+            mlflow.log_artifact(i_file)
+
+            try:
+                if accuracy > study.best_value:
+                    is_best = True
+            except ValueError:
+                is_best = True
+
+            # Eddigi legjobb paraméterek mentése
+            if is_best:
+                np.save("best_weights.npy", trained_weights)
+                np.save("best_indices.npy", trained_indices)
+                mlflow.log_dict(params, "best_params.json")
 
             mlflow.log_metric("accuracy", accuracy)
             return accuracy
@@ -155,6 +169,11 @@ if __name__ == "__main__":
 
     print("\n" + "="*30)
     print(f"BEST ACCURACY: {study.best_value:.4f}%")
+
+    # Legjobb paraméterek kiíratása jsonbe
+    with open("best_params.json", "w") as f:
+        json.dump(study.best_params, f, indent=4)
+
     print("BEST PARAMETERS:")
     for k, v in study.best_params.items():
         print(f"  {k}: {v}")

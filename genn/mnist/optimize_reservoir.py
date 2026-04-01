@@ -15,7 +15,7 @@ from reservoir_models import (
     set_seed,
 )
 
-CHOSEN_TOPOLOGY = "watts_strogatz"   # Lehetséges topológiák: "erdos_renyi", "watts_strogatz", "barabasi_albert"
+CHOSEN_TOPOLOGY = "barabasi_albert"   # Lehetséges topológiák: "erdos_renyi", "watts_strogatz", "barabasi_albert"
 STUDY_NAME = f"reservoir_{CHOSEN_TOPOLOGY}_optimalization"
 N_TRIALS = 50 # iterációk száma
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # ha van elérhető GPU akkor azt használjuk

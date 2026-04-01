@@ -10,36 +10,36 @@ latent_path = os.path.join(MODEL_WEIGHT_DIR, "mb_latent_data.npz")
 
 def apply_best_params_to_mbconfig(params):
     # A legjobb paramétereket tartalmazó json fájlból beolvassuk a paramétereket
-    MBConfig.PRESENT_TIME_MS = params["PRESENT_TIME_MS"]
-    MBConfig.INPUT_SCALE = params["INPUT_SCALE"]
-    MBConfig.NUM_KC = params["NUM_KC"]
-    MBConfig.PN_KC_FAN_IN = params["PN_KC_FAN_IN"]
+    MBConfig.PRESENT_TIME_MS = float(params["PRESENT_TIME_MS"])
+    MBConfig.INPUT_SCALE = float(params["INPUT_SCALE"])
+    MBConfig.NUM_KC = int(params["NUM_KC"])
+    MBConfig.PN_KC_FAN_IN = int(params["PN_KC_FAN_IN"])
 
-    MBConfig.LIF_PARAMS["Vthresh"] = params["Vthresh"]
-    MBConfig.LIF_PARAMS["TauM"] = params["TauM"]
-    MBConfig.PN_REFRAC = params["PN_REFRAC"]
+    MBConfig.LIF_PARAMS["Vthresh"] = float(params["Vthresh"])
+    MBConfig.LIF_PARAMS["TauM"] = float(params["TauM"])
+    MBConfig.PN_REFRAC = float(params["PN_REFRAC"])
 
-    MBConfig.PN_KC_WEIGHT = params["PN_KC_WEIGHT"]
-    MBConfig.PN_KC_TAU = params["PN_KC_TAU"]
-    MBConfig.KC_GGN_WEIGHT = params["KC_GGN_WEIGHT"]
-    MBConfig.GGN_KC_WEIGHT = params["GGN_KC_WEIGHT"]
-    MBConfig.GGN_KC_TAU = params["GGN_KC_TAU"]
-    MBConfig.KC_MBON_TAU = params["KC_MBON_TAU"]
-    MBConfig.MBON_STIMULUS_CURRENT = params["MBON_STIMULUS_CURRENT"]
+    MBConfig.PN_KC_WEIGHT = float(params["PN_KC_WEIGHT"])
+    MBConfig.PN_KC_TAU = float(params["PN_KC_TAU"])
+    MBConfig.KC_GGN_WEIGHT = float(params["KC_GGN_WEIGHT"])
+    MBConfig.GGN_KC_WEIGHT = float(params["GGN_KC_WEIGHT"])
+    MBConfig.GGN_KC_TAU = float(params["GGN_KC_TAU"])
+    MBConfig.KC_MBON_TAU = float(params["KC_MBON_TAU"])
+    MBConfig.MBON_STIMULUS_CURRENT = float(params["MBON_STIMULUS_CURRENT"])
 
     MBConfig.KC_MBON_PARAMS.update({
-        "eta": params["eta"],
-        "tauE": params["tauE"],
-        "rho": params["rho"],
-        "wMax": params["wMax"],
+        "eta": float(params["eta"]),
+        "tauE": float(params["tauE"]),
+        "rho": float(params["rho"]),
+        "wMax": float(params["wMax"]),
     })
 
 
 def load_best_model():
     # Modell fájlok beolvasása
     best_params_path = os.path.join(MODEL_WEIGHT_DIR, "best_params.json")
-    pn_kc_ind_path = os.path.join(MODEL_WEIGHT_DIR, "best_pn_kc_indices.npy")
-    kc_mbon_g_path = os.path.join(MODEL_WEIGHT_DIR, "best_kc_mbon_weights.npy")
+    pn_kc_ind_path = os.path.join(MODEL_WEIGHT_DIR, "best_indices.npy")
+    kc_mbon_g_path = os.path.join(MODEL_WEIGHT_DIR, "best_weights.npy")
 
     if not os.path.exists(best_params_path):
         raise FileNotFoundError(f"Missing file: {best_params_path}")

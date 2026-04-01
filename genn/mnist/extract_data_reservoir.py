@@ -11,11 +11,11 @@ from reservoir_models import (
     ReservoirTrainer
 )
 
-MODEL_WEIGHT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints_watts_strogatz")
+MODEL_WEIGHT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints_erdos_renyi")
 
 def load_best_model():
     # Modell fájlok beolvasása
-    best_params_path = os.path.join(MODEL_WEIGHT_DIR, "best_params.json")
+    best_params_path = os.path.join(MODEL_WEIGHT_DIR, "reservoir_er_params.json")
     best_model_path = os.path.join(MODEL_WEIGHT_DIR, "best_model.pt")
 
     if not os.path.exists(best_params_path):
