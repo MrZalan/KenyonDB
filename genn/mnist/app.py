@@ -37,7 +37,7 @@ class AppPaths:
     def build(cls) -> "AppPaths":
         mnist_root = os.path.dirname(os.path.abspath(__file__)) # projekt gyökérmappája
         user_images_dir = os.path.join(mnist_root, "user_images") # felhaszáló által rajzolt számjegyek mappája
-        model_weight_dir = os.path.join(mnist_root, "model_weights") # mpdell súlyokat tároló mappa
+        model_weight_dir = os.path.join(mnist_root, "checkpoints_mushroom_body") # modell súlyokat tároló mappa
         image_path = os.path.join(user_images_dir, "digit.png") # felhasználó által rajzolt MNIST számjegy
         db_path = os.path.join(mnist_root, "kenyon.db") # SqLite adatbázis fájl
         upload_dir = os.path.join(mnist_root, "uploaded_latent_vectors") # felhasználó által feltöltött latent vektorok mappája
@@ -79,15 +79,15 @@ class AppConfig:
         return {
             "Echo State Network (Watts-Strogatz)": (
                 os.path.join("checkpoints_watts_strogatz", "best_model.pt"),
-                os.path.join("checkpoints_watts_strogatz", "best_params.json"),
+                os.path.join("checkpoints_watts_strogatz", "reservoir_ws_params.json"),
             ),
             "Echo State Network (Barabási-Albert)": (
                 os.path.join("checkpoints_barabasi_albert", "best_model.pt"),
-                os.path.join("checkpoints_barabasi_albert", "best_params.json"),
+                os.path.join("checkpoints_barabasi_albert", "reservoir_ba_params.json"),
             ),
             "Echo State Network (Erdős-Rényi)": (
                 os.path.join("checkpoints_erdos_renyi", "best_model.pt"),
-                os.path.join("checkpoints_erdos_renyi", "best_params.json"),
+                os.path.join("checkpoints_erdos_renyi", "reservoir_er_params.json"),
             ),
         }
 
@@ -212,8 +212,8 @@ class ModelRegistry:
     @st.cache_resource(show_spinner=False)
     def load_snn_model(_self) -> MBSimulator:
         """Optuna optimalizáció során elmentett paraméterek, súlyok, indexek betöltése az snn modellhez"""
-        pn_kc_ind_path = os.path.join(_self.paths.model_weight_dir, "best_pn_kc_indices.npy") # PN - KC sparse indexek
-        kc_mbon_g_path = os.path.join(_self.paths.model_weight_dir, "best_kc_mbon_weights.npy") # KC - MBON súlyok
+        pn_kc_ind_path = os.path.join(_self.paths.model_weight_dir, "best_indices.npy") # PN - KC sparse indexek
+        kc_mbon_g_path = os.path.join(_self.paths.model_weight_dir, "best_weights.npy") # KC - MBON súlyok
         best_params_path = os.path.join(_self.paths.model_weight_dir, "best_params.json") # hálózat hiperparaméterei
 
         # Json beolvasása
