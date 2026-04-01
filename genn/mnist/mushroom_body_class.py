@@ -72,7 +72,7 @@ class MushroomBodyModel:
     def __init__(
         self,
         name: str,
-        backend: str = "cuda", #"single_threaded_cpu",
+        backend: str = "single_threaded_cpu",
         is_training: bool = True,
         sparse_indices=None,
         kc_mbon_g=None,
