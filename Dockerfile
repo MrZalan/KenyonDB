@@ -25,6 +25,7 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 ENV CUDA_PATH=/usr/local/cuda \
     APP_PATH=/opt/app \
     GENN_PATH=/opt/app/genn \
+    MNIST_PATH=/opt/app/genn/mnist \
     PYTHONUNBUFFERED=1
 
 # 4. Install Python dependencies
@@ -59,12 +60,19 @@ RUN git clone --branch master --recursive https://github.com/genn-team/genn.git 
 WORKDIR ${GENN_PATH}
 
 # 7. Copy your local 'genn' folder content into the GeNN path
-# This assumes you are running 'docker build' from the repo root
 COPY genn/ . 
 
-# 8. Build PyGeNN
+# 8. Add local pytest config for the mnist subproject
+RUN mkdir -p ${MNIST_PATH} && \
+    printf '%s\n' \
+    '[pytest]' \
+    'testpaths = tests' \
+    'pythonpath = .' \
+    > ${MNIST_PATH}/pytest.ini
+
+# 9. Build PyGeNN
 RUN python3 setup.py develop
-ENV PYTHONPATH=${GENN_PATH}
+ENV PYTHONPATH=${GENN_PATH}:${MNIST_PATH}
 
 # 9. Permissions for Hugging Face (UID 1000)
 RUN chmod -R 777 ${APP_PATH}

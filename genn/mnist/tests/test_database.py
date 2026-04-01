@@ -196,3 +196,66 @@ def test_similarity_search_zero_division(db):
     
     results = db.similarity_search([1], "mb")
     assert results[0]["metrics"]["jaccard"] == 1.0
+
+def test_foreign_key_consistency(db):
+    """Teszt idegen kulcsokra a vektor és metadata táblák között"""
+    active_ids = [10, 20]
+    db.add_new_record(label=1, original_index=99, active_ids=active_ids, model_type="mb")
+    
+    # SQLite SELECT lekéréssel validáljuk
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM mnist_vectors WHERE image_id = 1")
+        assert cursor.fetchone()[0] == 2
+
+def test_clear_database_isolation(db):
+    """Teszt, hogy egy modell törlése nem befolyásolja a többit"""
+    db.add_new_record(label=1, original_index=0, active_ids=[1, 2], model_type="mb")
+    db.add_new_record(label=2, original_index=0, active_ids=[3, 4], model_type="ws")
+    
+    db.clear_database_by_model("mb") # mb modell törlése
+    
+    summary = db.get_database_summary()
+    assert summary["models"]["mb"]["image_count"] == 0
+    assert summary["models"]["ws"]["image_count"] == 1
+
+def test_pt_strategy_tensor_conversion(db, tmp_path):
+    """Teszt a pytorch tensorok numpy formátummá alakítására"""
+    file_path = tmp_path / "test_tensor.pt"
+
+    # Torch tensorok elmentése
+    torch.save({
+        'vectors': torch.tensor([[1, 2]]),
+        'labels': torch.tensor([5]),
+        'images': [torch.ones((28, 28))],
+        'model_type': 'ba'
+    }, file_path)
+    
+    # PtStrategy választása
+    strategy = PtStrategy(db)
+    strategy.import_data(str(file_path), "ba")
+    
+    record = db.get_record_by_image_id(1)
+    assert isinstance(record["image"], np.ndarray) # np.ndarray típus
+
+def test_overlap_coefficient_logic(db):
+    """Teszt overlap coefficient metrikára"""
+    # Target: 4 neuron
+    db.add_new_record(label=1, original_index=0, active_ids=[1, 2, 3, 4], model_type="mb")
+    # Query: 2 neuron (mindkettő a targetben is)
+    query = [1, 2]
+    
+    results = db.similarity_search(query, model_type="mb", top_k=1)
+    metrics = results[0]["metrics"]
+    
+    # Overlap coeff = overlap / min(query_size, target_size) = 2 / min(2, 4) = 1.0
+    assert metrics["overlap_coeff"] == 1.0
+
+def test_summary_index_ranges(db):
+    """Teszt a min/max kép indexekre"""
+    db.add_new_record(label=1, original_index=10, active_ids=[1], model_type="mb")
+    db.add_new_record(label=1, original_index=50, active_ids=[2], model_type="mb")
+    
+    summary = db.get_database_summary()
+    assert summary["models"]["mb"]["min_image_index"] == 10
+    assert summary["models"]["mb"]["max_image_index"] == 50

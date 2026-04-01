@@ -158,7 +158,7 @@ class SessionManager:
             st.session_state.result_count = 5
 
     @staticmethod
-    def clear_logs() -> None
+    def clear_logs() -> None:
         st.session_state.db_logs = []
 
 
@@ -346,7 +346,7 @@ class DatabaseService:
         """Rekord lekérdezése image id alapján funkció meghívása"""
         return self.db.get_record_by_image_id(image_id)
 
-    def similarity_search(self, query_active_ids: List[int], model_type: str, top_k: int, progress_callback=None):
+    def similarity_search(self, query_active_ids: List[int], model_type: str, top_k: int):
         """Fő hasonlósági keresés funkciójának meghívása"""
         return self.db.similarity_search(
             query_active_ids=query_active_ids,
