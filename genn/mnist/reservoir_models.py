@@ -248,7 +248,10 @@ class ReservoirTrainer:
         logits, s_raw = self.model(img_tensor)
 
         probs = F.softmax(logits, dim=1)
+        max_prob = probs.max(dim=1).values.item()
         pred_label = torch.argmax(probs, dim=1).item()
+        if max_prob < 0.60:
+            pred_label = -1
 
         _, top_indices = s_raw.abs().topk(min(topk, s_raw.size(1)), dim=1) # legaktívabb neuronok kiválasztása (k)
 

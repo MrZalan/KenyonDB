@@ -122,13 +122,27 @@ class PayloadBuilder:
         self.__payload.prediction = prediction
         return self
     
-    def add_visualizations(self, hero_fig=None, secondary_fig=None, umap_fig=None, cm_fig=None, fig_overlap=None, fig_scores=None):
-        self.__payload.hero_fig = hero_fig
-        self.__payload.secondary_fig = secondary_fig
-        self.__payload.umap_fig = umap_fig
-        self.__payload.cm_fig = cm_fig
-        self.__payload.fig_overlap = fig_overlap
-        self.__payload.fig_scores = fig_scores
+    def add_visualizations(
+        self,
+        hero_fig=None,
+        secondary_fig=None,
+        umap_fig=None,
+        cm_fig=None,
+        fig_overlap=None,
+        fig_scores=None,
+        ):
+        if hero_fig is not None:
+            self.__payload.hero_fig = hero_fig
+        if secondary_fig is not None:
+            self.__payload.secondary_fig = secondary_fig
+        if umap_fig is not None:
+            self.__payload.umap_fig = umap_fig
+        if cm_fig is not None:
+            self.__payload.cm_fig = cm_fig
+        if fig_overlap is not None:
+            self.__payload.fig_overlap = fig_overlap
+        if fig_scores is not None:
+            self.__payload.fig_scores = fig_scores
         return self
     
     def add_metrics(self, metrics):
@@ -182,29 +196,29 @@ class ModelRegistry:
     @staticmethod
     def apply_best_params_to_mbconfig(params: Dict[str, Any]) -> None:
         """Optuna optimalizáció során elmentett legjobb paraméterek beolvasása json-ből az snn modellhez"""
-        MBConfig.PRESENT_TIME_MS = params["PRESENT_TIME_MS"]
-        MBConfig.INPUT_SCALE = params["INPUT_SCALE"]
-        MBConfig.NUM_KC = params["NUM_KC"]
-        MBConfig.PN_KC_FAN_IN = params["PN_KC_FAN_IN"]
+        MBConfig.PRESENT_TIME_MS = float(params["PRESENT_TIME_MS"])
+        MBConfig.INPUT_SCALE = float(params["INPUT_SCALE"])
+        MBConfig.NUM_KC = int(params["NUM_KC"])
+        MBConfig.PN_KC_FAN_IN = int(params["PN_KC_FAN_IN"])
 
-        MBConfig.LIF_PARAMS["Vthresh"] = params["Vthresh"]
-        MBConfig.LIF_PARAMS["TauM"] = params["TauM"]
-        MBConfig.PN_REFRAC = params["PN_REFRAC"]
+        MBConfig.LIF_PARAMS["Vthresh"] = float(params["Vthresh"])
+        MBConfig.LIF_PARAMS["TauM"] = float(params["TauM"])
+        MBConfig.PN_REFRAC = float(params["PN_REFRAC"])
 
-        MBConfig.PN_KC_WEIGHT = params["PN_KC_WEIGHT"]
-        MBConfig.PN_KC_TAU = params["PN_KC_TAU"]
-        MBConfig.KC_GGN_WEIGHT = params["KC_GGN_WEIGHT"]
-        MBConfig.GGN_KC_WEIGHT = params["GGN_KC_WEIGHT"]
-        MBConfig.GGN_KC_TAU = params["GGN_KC_TAU"]
-        MBConfig.KC_MBON_TAU = params["KC_MBON_TAU"]
-        MBConfig.MBON_STIMULUS_CURRENT = params["MBON_STIMULUS_CURRENT"]
+        MBConfig.PN_KC_WEIGHT = float(params["PN_KC_WEIGHT"])
+        MBConfig.PN_KC_TAU = float(params["PN_KC_TAU"])
+        MBConfig.KC_GGN_WEIGHT = float(params["KC_GGN_WEIGHT"])
+        MBConfig.GGN_KC_WEIGHT = float(params["GGN_KC_WEIGHT"])
+        MBConfig.GGN_KC_TAU = float(params["GGN_KC_TAU"])
+        MBConfig.KC_MBON_TAU = float(params["KC_MBON_TAU"])
+        MBConfig.MBON_STIMULUS_CURRENT = float(params["MBON_STIMULUS_CURRENT"])
 
         MBConfig.KC_MBON_PARAMS.update(
             {
-                "eta": params["eta"],
-                "tauE": params["tauE"],
-                "rho": params["rho"],
-                "wMax": params["wMax"],
+                "eta": float(params["eta"]),
+                "tauE": float(params["tauE"]),
+                "rho": float(params["rho"]),
+                "wMax": float(params["wMax"]),
             }
         )
 
@@ -813,8 +827,7 @@ class ModelFactory:
         if "Mushroom Body" in model_name:
             return SnnStrategy(registry, visualizer)
         else:
-            model_type_key = registry.get_model_type_key(model_name)
-            return ReservoirStrategy(registry, visualizer, config, model_type_key)
+            return ReservoirStrategy(registry, visualizer, config, model_name)
 
 
 class InferenceService:
@@ -838,6 +851,9 @@ class InferenceService:
         """Teljes polimorf inference pipeline"""
         model_type_key = self.registry.get_model_type_key(selected_model)
         builder = PayloadBuilder(selected_model, model_type_key)
+
+        if img is None or np.max(img) < 10 or np.count_nonzero(img > 10) < 5:
+            return builder.add_error("Draw a digit first.").build()
 
         try:
             cv2.imwrite(self.paths.image_path, img)
@@ -931,7 +947,7 @@ class InferenceService:
         for model_key in ["mb", "ws", "ba", "er"]:
             try:
                 self.visualizer.compute_cached_global_umap_bundle(self.paths.db_path, model_key)
-                self.db:db_service.notify(f"[OK] UMAP cached for {model_key}")
+                self.db_service.notify(f"[OK] UMAP cached for {model_key}")
             except Exception as exc:
                 self.db_service.notify(f"[WARN] UMAP cache failed for {model_key}: {exc}")
 
@@ -1041,13 +1057,27 @@ class StreamlitRenderer:
 
         img = None
         rescaled = None
+        is_valid_input = False
 
         # Kép átméretezése és fekete-fehérré alakítása
         if canvas_result.image_data is not None:
-            img = cv2.cvtColor(canvas_result.image_data.astype("uint8"), cv2.COLOR_RGBA2GRAY)
-            img = cv2.resize(img, (28, 28))
-            rescaled = cv2.resize(img, (self.config.SIZE, self.config.SIZE), interpolation=cv2.INTER_NEAREST)
-        
+            raw_img = cv2.cvtColor(canvas_result.image_data.astype("uint8"), cv2.COLOR_RGBA2GRAY)
+            img_candidate = cv2.resize(raw_img, (28, 28))
+
+            max_intensity = int(np.max(img_candidate))
+            active_pixels = int(np.count_nonzero(img_candidate > 20))
+            ink_sum = int(np.sum(img_candidate))
+
+            is_valid_input = (
+                max_intensity >= 40 and
+                active_pixels >= 12 and
+                ink_sum >= 1200
+            )
+
+            if is_valid_input:
+                img = img_candidate
+                rescaled = cv2.resize(img, (self.config.SIZE, self.config.SIZE), interpolation=cv2.INTER_NEAREST)
+
         # Feldolgozott kép megjelenítése
         with preview_col:
             st.caption("Model input")
@@ -1055,6 +1085,9 @@ class StreamlitRenderer:
                 st.image(rescaled, use_container_width=True)
             else:
                 st.info("Draw a digit to preview the 28×28 input.")
+
+            if canvas_result.image_data is not None and not is_valid_input:
+                st.warning("Draw a larger digit. A tiny dot or very faint mark will be ignored")
 
         # Modell kiválasztása
         st.session_state.selected_model = st.selectbox(
@@ -1071,7 +1104,7 @@ class StreamlitRenderer:
         )
 
         # Program indítása
-        run = st.button("Run analysis", use_container_width=True, type="primary")
+        run = st.button("Run analysis", use_container_width=True, type="primary",disabled=not is_valid_input)
         clear_cache = st.button("Clear cache", use_container_width=True) # Opcionálisan cache törlése
         if clear_cache:
             st.cache_resource.clear()
@@ -1155,9 +1188,8 @@ class StreamlitRenderer:
                 st.subheader("Overview")
                 p1, p2, p3, p4 = st.columns(4)
                 p1.metric("Prediction", "-")
-                p2.metric("Model accuracy", "-")
-                p3.metric("Matches", st.session_state.result_count)
-                p4.metric("Model", self.registry.get_model_type_key(st.session_state.selected_model).upper())
+                p2.metric("Matches", st.session_state.result_count)
+                p3.metric("Model", self.registry.get_model_type_key(st.session_state.selected_model).upper())
                 st.info("Run the analysis to populate this dashboard with activity charts, confusion matrix, and retrieved matches.")
 
     def render_database_tab(self) -> None:
