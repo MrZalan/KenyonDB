@@ -1,0 +1,30 @@
+{
+  "topology_type": "barabasi_albert",
+  "metrics": {
+    "accuracy": 89.74,
+    "f1": 0.8970708359733046,
+    "recall": 0.8974
+  },
+  "trial_number": 35,
+  "res_cfg": {
+    "size": 500,
+    "feedback_size": 28,
+    "spectral_radius": 1.4398232363009609,
+    "leak_rate": 0.14985823975883092,
+    "topology_type": "barabasi_albert",
+    "topology_params": {
+      "m": 10
+    }
+  },
+  "sparse_cfg": {
+    "reservoir_dim": 500,
+    "sparse_dim": 3072,
+    "sh_lambda": 0.13606159276365995,
+    "l1_alpha": 0.0006162447454703443,
+    "lr": 0.00024876532881051497,
+    "epochs": 15,
+    "early_stopping_patience": 4,
+    "early_stopping_min_delta": 0.0001,
+    "restore_best_weights": true
+  }
+}
