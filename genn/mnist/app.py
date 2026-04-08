@@ -76,18 +76,20 @@ class AppConfig:
 
     @classmethod
     def topology_map(cls) -> Dict[str, Tuple[str, str]]:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    
         return {
             "Echo State Network (Watts-Strogatz)": (
-                os.path.join("checkpoints_watts_strogatz", "best_model.pt"),
-                os.path.join("checkpoints_watts_strogatz", "reservoir_ws_params.json"),
+                os.path.join(base_dir, "checkpoints_watts_strogatz", "best_model.pt"),
+                os.path.join(base_dir, "checkpoints_watts_strogatz", "reservoir_ws_params.json"),
             ),
             "Echo State Network (Barabási-Albert)": (
-                os.path.join("checkpoints_barabasi_albert", "best_model.pt"),
-                os.path.join("checkpoints_barabasi_albert", "reservoir_ba_params.json"),
+                os.path.join(base_dir, "checkpoints_barabasi_albert", "best_model.pt"),
+                os.path.join(base_dir, "checkpoints_barabasi_albert", "reservoir_ba_params.json"),
             ),
             "Echo State Network (Erdős-Rényi)": (
-                os.path.join("checkpoints_erdos_renyi", "best_model.pt"),
-                os.path.join("checkpoints_erdos_renyi", "reservoir_er_params.json"),
+                os.path.join(base_dir, "checkpoints_erdos_renyi", "best_model.pt"),
+                os.path.join(base_dir, "checkpoints_erdos_renyi", "reservoir_er_params.json"),
             ),
         }
 
@@ -798,27 +800,34 @@ class ReservoirStrategy(ModelStrategy):
             "reservoir": self.model.model.reservoir
         }
 
-    def plot_results(self, inf_result, payload, num_results):
+    def plot_results(self, inf_result, payload_builder, num_results):
         prediction = inf_result["prediction"]
         retrieval_ids = inf_result["retrieval_ids"]
         reservoir = inf_result["reservoir"]
-
-        payload.prediction = prediction
-        
+    
         try:
-            reservoir_graph = self.visualizer.build_reservoir_graph_from_weight_hh(reservoir, max_nodes=120)
-            payload.hero_fig = self.visualizer.plot_reservoir_graph_core(reservoir_graph, title=f"{self.selected_model} Reservoir Core")
-            
+            reservoir_graph = self.visualizer.build_reservoir_graph_from_weight_hh(
+                reservoir, max_nodes=120
+            )
+            hero_fig = self.visualizer.plot_reservoir_graph_core(
+                reservoir_graph,
+                title=f"{self.selected_model} Reservoir Core"
+            )
+    
             stats = self.visualizer.get_reservoir_graph_stats(reservoir)
-            payload.summary_metrics = {
+            payload_builder.add_prediction(prediction).add_visualizations(
+                hero_fig=hero_fig
+            ).add_metrics({
                 "Nodes": stats["nodes"],
                 "Edges": stats["edges"],
                 "Density": f"{stats['density']:.4f}",
                 "Retrieved": num_results,
-            }
+            })
         except Exception as exc:
-            payload.error = f"Graph visualization failed: {exc}"
-            
+            payload_builder.add_prediction(prediction).add_error(
+                f"Graph visualization failed: {exc}"
+            )
+    
         return retrieval_ids
 
 class ModelFactory:
@@ -1025,17 +1034,15 @@ class StreamlitRenderer:
 
                 # Metaadatok kiírása
                 meta1, meta2 = st.columns(2)
-                meta1.metric("Label", result["label"])
-                meta2.metric("Image ID", result["image_id"])
+                meta1.write(f"**Label:** {result['label']}")
+                meta2.write(f"**ID:** {result['image_id']}")
 
                 # Hasonlósági metrikák kiírása
-                st.caption("Similarity")
-                m1, m2 = st.columns(2)
-                m1.metric("Overlap", int(result["metrics"]["overlap"]))
-                m2.metric("Jaccard", f"{result['metrics']['jaccard']:.3f}")
-                m3, m4 = st.columns(2)
-                m3.metric("Dice", f"{result['metrics']['dice']:.3f}")
-                m4.metric("Overlap coeff.", f"{result['metrics']['overlap_coeff']:.3f}")
+                st.caption("Similarity Scores")
+                st.write(f"Overlap: {int(result['metrics']['overlap'])}")
+                st.write(f"Jaccard: {result['metrics']['jaccard']:.3f}")
+                st.write(f"Dice: {result['metrics']['dice']:.3f}")
+                st.write(f"Overlap Coeff: {result['metrics']['overlap_coeff']:.3f}")
 
     def render_input_panel(self) -> Tuple[Optional[np.ndarray], bool]:
         """Canvas az input számjegyek rajzolásához"""
@@ -1116,6 +1123,8 @@ class StreamlitRenderer:
 
     def render_inference_results(self, payload: InferencePayload) -> None:
         """Inference eredmények betöltése"""
+        if payload.error:
+            st.sidebar.error(f"Error: {payload.error}")
         if payload.error and payload.prediction is None:
             st.error(f"Failed to run analysis: {payload.error}")
             return
