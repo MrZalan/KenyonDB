@@ -16,6 +16,8 @@ from pygenn import (
     create_out_post_var_ref,
     create_custom_update_model,
 )
+import medmnist
+from medmnist import INFO
 
 
 class MBConfig:
@@ -72,7 +74,7 @@ class MushroomBodyModel:
     def __init__(
         self,
         name: str,
-        backend: str = "single_threaded_cpu",
+        backend: str = "cuda",
         is_training: bool = True,
         sparse_indices=None,
         kc_mbon_g=None,
@@ -532,3 +534,42 @@ def load_mnist():
     test_imgs /= np.sum(test_imgs, axis=1)[:, np.newaxis]
     test_labels = mnist.test_labels()
     return train_imgs, train_labels, test_imgs, test_labels
+
+
+
+def load_medmnist(data_flag='pneumoniamnist'):
+    """
+    Loads and formats MedMNIST data for the Mushroom Body SNN.
+    Flattens the 28x28 images to 784-element arrays and normalizes them.
+    """
+    info = INFO[data_flag]
+    DataClass = getattr(medmnist, info['python_class'])
+    num_classes = len(info['label'])
+
+    # Download and load the datasets
+    train_dataset = DataClass(split='train', download=True)
+    test_dataset = DataClass(split='test', download=True)
+
+    # Extract images and labels
+    train_imgs = train_dataset.imgs
+    train_labels = train_dataset.labels.squeeze() # Squeeze to make it a 1D array
+    
+    test_imgs = test_dataset.imgs
+    test_labels = test_dataset.labels.squeeze()
+
+    # The SNN expects flattened float32 arrays normalized by row sum (Sum-scaling)
+    # Reshape (N, 28, 28) -> (N, 784)
+    train_imgs_flat = train_imgs.reshape(train_imgs.shape[0], -1).astype(np.float32)
+    test_imgs_flat = test_imgs.reshape(test_imgs.shape[0], -1).astype(np.float32)
+
+    # Normalize: divide each pixel by the sum of all pixels in that image
+    # We add a small epsilon to avoid division by zero if an image is completely black
+    epsilon = 1e-8
+    train_imgs_normalized = train_imgs_flat / (np.sum(train_imgs_flat, axis=1)[:, np.newaxis] + epsilon)
+    test_imgs_normalized = test_imgs_flat / (np.sum(test_imgs_flat, axis=1)[:, np.newaxis] + epsilon)
+
+    print(f"Loaded {data_flag}:")
+    print(f"Train shapes - Images: {train_imgs_normalized.shape}, Labels: {train_labels.shape}")
+    print(f"Test shapes - Images: {test_imgs_normalized.shape}, Labels: {test_labels.shape}")
+
+    return train_imgs_normalized, train_labels, test_imgs_normalized, test_labels, num_classes
